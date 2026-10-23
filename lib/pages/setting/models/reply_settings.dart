@@ -16,6 +16,16 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
 
 List<SettingsModel> get replySettings => [
+  NormalModel(
+    title: '评论净化助手',
+    getSubtitle: () =>
+        '已仅在评论区屏蔽 ${ReplyGrpc.replyPurifyConfig.mutedUsers.length} 个账号',
+    leading: const Icon(Icons.comments_disabled_outlined),
+    onTap: (context, setState) async {
+      await Get.toNamed('/replyPurify');
+      setState();
+    },
+  ),
   const SwitchModel(
     title: '显示视频评论',
     leading: Icon(MdiIcons.commentTextOutline),
@@ -55,10 +65,7 @@ List<SettingsModel> get replySettings => [
   if (Platform.isAndroid)
     const SwitchModel(
       title: '使用「哔哩发评反诈」检查评论',
-      leading: Icon(
-        FontAwesomeIcons.b,
-        size: 22,
-      ),
+      leading: Icon(FontAwesomeIcons.b, size: 22),
       setKey: SettingBoxKey.biliSendCommAntifraud,
       defaultVal: false,
     ),
@@ -204,10 +211,7 @@ Future<void> _showReplyAtBlockDialog(
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       ),
       actions: [
-        TextButton(
-          onPressed: onChanged,
-          child: const Text('禁用'),
-        ),
+        TextButton(onPressed: onChanged, child: const Text('禁用')),
         TextButton(
           onPressed: Get.back,
           child: Text(

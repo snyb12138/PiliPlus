@@ -1,20 +1,19 @@
 <div align="center">
     <img width="200" height="200" src="assets/images/logo/logo.png" alt="PiliPlus logo">
-    <h1>PiliPlus</h1>
+    <h1>PiliPlus Purify</h1>
 </div>
 
 <div align="center">
 
 [中文](README.md) | English
 
-![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus)
-![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus)
-![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total)
+![GitHub repo size](https://img.shields.io/github/repo-size/snyb12138/PiliPlus)
+![GitHub all releases](https://img.shields.io/github/downloads/snyb12138/PiliPlus/total)
 
 </div>
 
 <div align="center">
-    <p>A third-party Bilibili client built with Flutter</p>
+    <p>A PiliPlus community fork focused on local comment and danmaku filtering</p>
 
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="PiliPlus mobile screenshot" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="PiliPlus mobile screenshot" />
@@ -26,9 +25,13 @@
 
 <br/>
 
+## Purify edition
+
+This GPL-3.0 community fork is based on [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus). It adds a local-only comment account mute list, quick comment actions, import/export, and the danmaku filter assistant from PR #3222. New filters are opt-in, explainable, and reversible; no comments, danmaku, or block lists are uploaded.
+
 ## Download
 
-Download a build from [Releases](https://github.com/bggRGjQaUbCoE/PiliPlus/releases), or clone the repository and build it locally.
+Download a build from [Releases](https://github.com/snyb12138/PiliPlus/releases), or clone the `purify` branch and build it locally.
 
 ## Disclaimer
 

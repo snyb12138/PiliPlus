@@ -7,6 +7,9 @@ import 'package:PiliPlus/build_config.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
+import 'package:PiliPlus/grpc/reply.dart';
+import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/pages/my_reply/view.dart';
 import 'package:PiliPlus/pages/search/controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -35,6 +38,7 @@ abstract final class ConfigArchive {
   static const String settingFileName = 'setting.json';
   static const String accountFileName = 'account.json';
   static const String blacklistFileName = 'blacklist.json';
+  static const String purifyFileName = 'purify.json';
   static const String replyFileName = 'reply.json';
   static const String searchFileName = 'search.json';
   static const String fontFileName = FontUtils.kFontName;
@@ -43,7 +47,7 @@ abstract final class ConfigArchive {
 
   /// 归档格式版本
   static const int _majorVersion = 0x0001;
-  static const int _minorVersion = 0x0000;
+  static const int _minorVersion = 0x0001;
 
   /// 搜索历史的存储 key
   static const String _searchCacheKey = 'cacheList';
@@ -56,7 +60,8 @@ abstract final class ConfigArchive {
       ..startEncode(stream)
       ..add(ArchiveFile.string(settingFileName, GStorage.exportAllSettings()))
       ..add(ArchiveFile.string(accountFileName, _exportAccount()))
-      ..add(ArchiveFile.string(blacklistFileName, _exportBlacklist()));
+      ..add(ArchiveFile.string(blacklistFileName, _exportBlacklist()))
+      ..add(ArchiveFile.string(purifyFileName, _exportPurify()));
 
     final reply = _exportReply();
     if (reply != null) {
@@ -137,6 +142,7 @@ abstract final class ConfigArchive {
     await apply(settingFileName, _importSettings);
     await apply(accountFileName, Accounts.importJsonAccount);
     await apply(blacklistFileName, _importBlacklist);
+    await apply(purifyFileName, _importPurify);
     await apply(replyFileName, _importReply);
     await apply(searchFileName, _importSearch);
 
@@ -203,6 +209,12 @@ abstract final class ConfigArchive {
 
   static String _exportBlacklist() => jsonEncode(Pref.blackMids.toList());
 
+  static String _exportPurify() => jsonEncode({
+    'version': 1,
+    'danmakuAssistant': Pref.danmakuAssistantConfig.toStorage(),
+    'replyPurify': ReplyGrpc.replyPurifyConfig.toStorage(),
+  });
+
   static String? _exportReply() {
     final box = GStorage.reply;
     if (box == null) return null;
@@ -233,6 +245,7 @@ abstract final class ConfigArchive {
       settingFileName,
       accountFileName,
       blacklistFileName,
+      purifyFileName,
       if (GStorage.reply != null) replyFileName,
       searchFileName,
       if (FontUtils.fontFile.existsSync()) fontFileName,
@@ -254,6 +267,20 @@ abstract final class ConfigArchive {
       ..clear()
       ..addAll(Set<int>.from(list));
     Pref.blackMids = set;
+  }
+
+  static Future<void> _importPurify(Map<String, dynamic> data) async {
+    if (data['danmakuAssistant'] case final Map danmaku) {
+      await GStorage.localCache.put(
+        LocalCacheKey.danmakuAssistantConfig,
+        DanmakuAssistantConfig.fromStorage(danmaku).toStorage(),
+      );
+    }
+    if (data['replyPurify'] case final Map reply) {
+      await ReplyGrpc.replaceReplyPurifyConfig(
+        ReplyPurifyConfig.fromStorage(reply),
+      );
+    }
   }
 
   static void _importReply(List<dynamic> list) {

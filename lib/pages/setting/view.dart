@@ -6,6 +6,7 @@ import 'package:PiliPlus/http/login.dart';
 import 'package:PiliPlus/models/common/setting_type.dart';
 import 'package:PiliPlus/pages/about/view.dart';
 import 'package:PiliPlus/pages/login/controller.dart';
+import 'package:PiliPlus/pages/purify_center/view.dart';
 import 'package:PiliPlus/pages/setting/common_setting.dart';
 import 'package:PiliPlus/pages/setting/widgets/multi_select_dialog.dart';
 import 'package:PiliPlus/pages/webdav/view.dart';
@@ -23,11 +24,7 @@ class _SettingsModel {
   final String? subtitle;
   final Icon icon;
 
-  const _SettingsModel({
-    required this.type,
-    this.subtitle,
-    required this.icon,
-  });
+  const _SettingsModel({required this.type, this.subtitle, required this.icon});
 }
 
 class SettingPage extends StatefulWidget {
@@ -48,6 +45,11 @@ class _SettingPageState extends State<SettingPage> {
       type: .privacySetting,
       subtitle: '账号、黑名单',
       icon: Icon(Icons.privacy_tip_outlined),
+    ),
+    _SettingsModel(
+      type: .purifySetting,
+      subtitle: '评论净化、弹幕屏蔽助手、本地规则',
+      icon: Icon(Icons.auto_fix_high_outlined),
     ),
     _SettingsModel(
       type: .recommendSetting,
@@ -93,10 +95,7 @@ class _SettingPageState extends State<SettingPage> {
       type: .webdavSetting,
       icon: Icon(MdiIcons.databaseCogOutline),
     ),
-    _SettingsModel(
-      type: .about,
-      icon: Icon(Icons.info_outline),
-    ),
+    _SettingsModel(type: .about, icon: Icon(Icons.info_outline)),
   ];
 
   @override
@@ -110,19 +109,14 @@ class _SettingPageState extends State<SettingPage> {
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      appBar: AppBar(
-        title: _isPortrait ? const Text('设置') : Text(_type.title),
-      ),
+      appBar: AppBar(title: _isPortrait ? const Text('设置') : Text(_type.title)),
       body: ViewSafeArea(
         child: _isPortrait
             ? _buildList(theme)
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    flex: 4,
-                    child: _buildList(theme),
-                  ),
+                  Expanded(flex: 4, child: _buildList(theme)),
                   VerticalDivider(
                     width: 1,
                     color: theme.colorScheme.outline.withValues(alpha: 0.1),
@@ -131,6 +125,9 @@ class _SettingPageState extends State<SettingPage> {
                     flex: 6,
                     child: switch (_type) {
                       .webdavSetting => const WebDavSettingPage(
+                        showAppBar: false,
+                      ),
+                      .purifySetting => const PurifyCenterPage(
                         showAppBar: false,
                       ),
                       .about => const AboutPage(showAppBar: false),
@@ -154,6 +151,7 @@ class _SettingPageState extends State<SettingPage> {
       Get.to(
         () => switch (type) {
           .webdavSetting => const WebDavSettingPage(),
+          .purifySetting => const PurifyCenterPage(),
           .about => const AboutPage(),
           _ => CommonSetting(settingType: type),
         },
@@ -240,9 +238,7 @@ class _SettingPageState extends State<SettingPage> {
       builder: (context) => MultiSelectDialog<LoginAccount>(
         title: '选择要登出的账号uid',
         initValues: const Iterable.empty(),
-        values: {
-          for (final i in Accounts.account.values) i: i.mid.toString(),
-        },
+        values: {for (final i in Accounts.account.values) i: i.mid.toString()},
       ),
     );
     if (!context.mounted || result == null || result.isEmpty) return;
@@ -301,11 +297,7 @@ class _SettingPageState extends State<SettingPage> {
   }
 
   Widget _buildSearchItem(ThemeData theme) => Padding(
-    padding: const EdgeInsets.only(
-      left: 16,
-      right: 16,
-      bottom: 8,
-    ),
+    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
     child: Material(
       color: theme.colorScheme.onInverseSurface,
       borderRadius: const BorderRadius.all(Radius.circular(50)),
@@ -318,11 +310,7 @@ class _SettingPageState extends State<SettingPage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  size: 18,
-                  applyTextScaling: true,
-                  Icons.search,
-                ),
+                Icon(size: 18, applyTextScaling: true, Icons.search),
                 Text(
                   ' 搜索',
                   style: TextStyle(height: 1),

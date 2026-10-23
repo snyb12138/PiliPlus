@@ -277,10 +277,7 @@ class ReplyItemGrpc extends StatelessWidget {
                   ),
                 ),
               ),
-            Padding(
-              padding: const .only(right: 80),
-              child: header,
-            ),
+            Padding(padding: const .only(right: 80), child: header),
           ],
         );
       }
@@ -690,9 +687,7 @@ class ReplyItemGrpc extends StatelessWidget {
                           ),
                         TextSpan(
                           text: '共${replyItem.count}条回复',
-                          style: TextStyle(
-                            color: colorScheme.primary,
-                          ),
+                          style: TextStyle(color: colorScheme.primary),
                         ),
                       ],
                     ),
@@ -779,10 +774,7 @@ class ReplyItemGrpc extends StatelessWidget {
                   if (cvid != null) {
                     Get.toNamed(
                       '/articlePage',
-                      parameters: {
-                        'id': cvid,
-                        'type': 'read',
-                      },
+                      parameters: {'id': cvid, 'type': 'read'},
                     );
                     return;
                   }
@@ -1000,9 +992,7 @@ class ReplyItemGrpc extends StatelessWidget {
     final style = theme.textTheme.titleSmall!;
 
     return Padding(
-      padding: .only(
-        bottom: MediaQuery.viewPaddingOf(context).bottom + 20,
-      ),
+      padding: .only(bottom: MediaQuery.viewPaddingOf(context).bottom + 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1089,9 +1079,7 @@ class ReplyItemGrpc extends StatelessWidget {
                             if (ownerMid != item.member.mid.toInt()) ...[
                               TextSpan(
                                 text: '@${item.member.name}',
-                                style: TextStyle(
-                                  color: colorScheme.primary,
-                                ),
+                                style: TextStyle(color: colorScheme.primary),
                               ),
                               const TextSpan(text: ':\n'),
                             ],
@@ -1104,9 +1092,7 @@ class ReplyItemGrpc extends StatelessWidget {
                           onPressed: () => Get.back(result: false),
                           child: Text(
                             '取消',
-                            style: TextStyle(
-                              color: colorScheme.outline,
-                            ),
+                            style: TextStyle(color: colorScheme.outline),
                           ),
                         ),
                         TextButton(
@@ -1138,6 +1124,41 @@ class ReplyItemGrpc extends StatelessWidget {
               leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
               title: Text('删除', style: style.copyWith(color: errorColor)),
             ),
+          if (ownerMid != item.member.mid)
+            ListTile(
+              onTap: () async {
+                final confirmed = await showConfirmDialog(
+                  context: context,
+                  title: Text('仅在评论区屏蔽 @${item.member.name}？'),
+                  content: const Text(
+                    '该用户的评论将在本机隐藏，但不会影响其视频、动态或你的哔哩哔哩账号黑名单。可在“设置 → 净化中心”中撤销。',
+                  ),
+                );
+                if (!confirmed) return;
+                final added = await ReplyGrpc.muteReplyUser(
+                  item.mid.toInt(),
+                  name: item.member.name,
+                );
+                if (!context.mounted) return;
+                Get.back();
+                if (added) {
+                  onDelete();
+                  SmartDialog.showToast('已仅屏蔽该用户的评论');
+                } else {
+                  SmartDialog.showToast('该用户已在评论净化列表中');
+                }
+              },
+              minLeadingWidth: 0,
+              leading: Icon(
+                Icons.comments_disabled_outlined,
+                color: colorScheme.primary,
+                size: 19,
+              ),
+              title: Text(
+                '仅屏蔽其评论',
+                style: style.copyWith(color: colorScheme.primary),
+              ),
+            ),
           if (ownerMid == Int64.ZERO)
             ListTile(
               onTap: () {
@@ -1150,7 +1171,7 @@ class ReplyItemGrpc extends StatelessWidget {
               minLeadingWidth: 0,
               leading: Icon(Icons.error_outline, color: errorColor, size: 19),
               title: Text(
-                '屏蔽',
+                '全局屏蔽此用户',
                 style: TextStyle(fontSize: 14, color: errorColor),
               ),
             )

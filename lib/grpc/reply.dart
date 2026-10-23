@@ -4,6 +4,7 @@ import 'package:PiliPlus/grpc/bilibili/pagination.pb.dart';
 import 'package:PiliPlus/grpc/grpc_req.dart';
 import 'package:PiliPlus/grpc/url.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
@@ -17,6 +18,26 @@ abstract final class ReplyGrpc {
     caseSensitive: false,
   );
   static bool enableFilter = replyRegExp.pattern.isNotEmpty;
+  static ReplyPurifyConfig replyPurifyConfig = Pref.replyPurifyConfig;
+
+  static Future<bool> muteReplyUser(int mid, {String name = ''}) async {
+    if (mid <= 0 || replyPurifyConfig.contains(mid)) return false;
+    replyPurifyConfig = replyPurifyConfig.addUser(mid, name: name);
+    await Pref.setReplyPurifyConfig(replyPurifyConfig);
+    return true;
+  }
+
+  static Future<bool> unmuteReplyUser(int mid) async {
+    if (!replyPurifyConfig.contains(mid)) return false;
+    replyPurifyConfig = replyPurifyConfig.removeUser(mid);
+    await Pref.setReplyPurifyConfig(replyPurifyConfig);
+    return true;
+  }
+
+  static Future<void> replaceReplyPurifyConfig(ReplyPurifyConfig config) async {
+    replyPurifyConfig = config;
+    await Pref.setReplyPurifyConfig(config);
+  }
 
   // static Future replyInfo({required int rpid}) {
   //   return _request(
@@ -97,7 +118,9 @@ abstract final class ReplyGrpc {
   }
 
   static bool needRemoveGrpc(ReplyInfo reply) {
-    return GlobalData().blackMids.contains(reply.mid.toInt()) ||
+    final mid = reply.mid.toInt();
+    return replyPurifyConfig.contains(mid) ||
+        GlobalData().blackMids.contains(mid) ||
         _blockReplyAtCount(reply) ||
         _blockAtOnlyReply(reply) ||
         (antiGoodsReply && _needRemoveGoodGrpc(reply)) ||
@@ -118,10 +141,7 @@ abstract final class ReplyGrpc {
         oid: Int64(oid),
         type: Int64(type),
         rpid: rpid,
-        cursor: CursorReq(
-          mode: mode,
-          next: cursorNext,
-        ),
+        cursor: CursorReq(mode: mode, next: cursorNext),
         // mode: mode,
         // pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
@@ -201,10 +221,7 @@ abstract final class ReplyGrpc {
     return GrpcReq.request(
       GrpcUrl.searchItem,
       SearchItemReq(
-        cursor: SearchItemCursorReq(
-          next: Int64(page),
-          itemType: itemType,
-        ),
+        cursor: SearchItemCursorReq(next: Int64(page), itemType: itemType),
         oid: Int64(oid),
         type: Int64(type),
         keyword: keyword,
@@ -220,11 +237,7 @@ abstract final class ReplyGrpc {
   }) {
     return GrpcReq.request(
       GrpcUrl.translateReply,
-      TranslateReplyReq(
-        type: type,
-        oid: oid,
-        rpids: [rpid],
-      ),
+      TranslateReplyReq(type: type, oid: oid, rpids: [rpid]),
       TranslateReplyResp.fromBuffer,
     );
   }

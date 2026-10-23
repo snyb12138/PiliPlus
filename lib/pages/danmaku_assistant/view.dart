@@ -1,6 +1,9 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -8,24 +11,36 @@ class DanmakuAssistantPage extends StatefulWidget {
   const DanmakuAssistantPage({super.key});
 
   @override
-  State<DanmakuAssistantPage> createState() =>
-      _DanmakuAssistantPageState();
+  State<DanmakuAssistantPage> createState() => _DanmakuAssistantPageState();
 }
 
 class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
-  late final PlPlayerController _playerController;
+  PlPlayerController? _playerController;
   late DanmakuAssistantConfig _config;
 
   @override
   void initState() {
     super.initState();
-    _playerController = Get.arguments as PlPlayerController;
-    _config = _playerController.danmakuAssistantConfig;
+    final arguments = Get.arguments;
+    if (arguments is PlPlayerController) {
+      _playerController = arguments;
+    }
+    _config =
+        _playerController?.danmakuAssistantConfig ??
+        Pref.danmakuAssistantConfig;
   }
 
   void _save(DanmakuAssistantConfig config) {
     setState(() => _config = config);
-    _playerController.updateDanmakuAssistantConfig(config);
+    final playerController = _playerController;
+    if (playerController != null) {
+      playerController.updateDanmakuAssistantConfig(config);
+    } else {
+      GStorage.localCache.put(
+        LocalCacheKey.danmakuAssistantConfig,
+        config.toStorage(),
+      );
+    }
   }
 
   Future<void> _addRule({required bool absolute}) async {
@@ -51,15 +66,20 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
               valueListenable: textController,
               builder: (context, value, _) {
                 final rule = value.text.trim();
-                final hitCount = rule.isEmpty
+                final samples = _playerController?.danmakuAssistantSamples;
+                final hitCount = rule.isEmpty || samples == null
                     ? 0
-                    : _playerController.danmakuAssistantSamples.where((item) {
+                    : samples.where((item) {
                         final content = item.content.trim();
                         return absolute
                             ? content.contains(rule)
                             : content == rule;
                       }).length;
-                return Text('当前已加载弹幕预计命中 $hitCount 条');
+                return Text(
+                  samples == null
+                      ? '从播放器打开时可预览当前视频命中数'
+                      : '当前已加载弹幕预计命中 $hitCount 条',
+                );
               },
             ),
           ],
@@ -180,9 +200,10 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
   }
 
   Widget _stats() {
+    final playerController = _playerController!;
     final theme = Theme.of(context);
-    final total = _playerController.danmakuAssistantBlockedTotal;
-    final counts = _playerController.danmakuAssistantReasonCounts;
+    final total = playerController.danmakuAssistantBlockedTotal;
+    final counts = playerController.danmakuAssistantReasonCounts;
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Padding(
@@ -199,7 +220,7 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: _playerController.clearDanmakuAssistantRecords,
+                  onPressed: playerController.clearDanmakuAssistantRecords,
                   child: const Text('清空统计'),
                 ),
               ],
@@ -211,17 +232,13 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
               children: DanmakuAssistantKind.values
                   .where((kind) => (counts[kind] ?? 0) > 0)
                   .map(
-                    (kind) => Chip(
-                      label: Text('${kind.label} ${counts[kind]}'),
-                    ),
+                    (kind) =>
+                        Chip(label: Text('${kind.label} ${counts[kind]}')),
                   )
                   .toList(),
             ),
             if (total == 0)
-              Text(
-                '播放或拖动视频后，这里会显示本地命中统计。',
-                style: theme.textTheme.bodySmall,
-              ),
+              Text('播放或拖动视频后，这里会显示本地命中统计。', style: theme.textTheme.bodySmall),
           ],
         ),
       ),
@@ -239,22 +256,19 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
         title: const Text('日期与日期打卡'),
         subtitle: const Text('例如：2025.8探访古迹、10月1日 1000人'),
         value: _config.blockDateStamps,
-        onChanged: (value) =>
-            _save(_config.copyWith(blockDateStamps: value)),
+        onChanged: (value) => _save(_config.copyWith(blockDateStamps: value)),
       ),
       SwitchListTile(
         title: const Text('时间打卡'),
         subtitle: const Text('例如：12:00 1000人'),
         value: _config.blockTimeStamps,
-        onChanged: (value) =>
-            _save(_config.copyWith(blockTimeStamps: value)),
+        onChanged: (value) => _save(_config.copyWith(blockTimeStamps: value)),
       ),
       SwitchListTile(
         title: const Text('纯人数刷屏'),
         subtitle: const Text('例如：1000人；不会误伤完整语句中的人数'),
         value: _config.blockPeopleCounts,
-        onChanged: (value) =>
-            _save(_config.copyWith(blockPeopleCounts: value)),
+        onChanged: (value) => _save(_config.copyWith(blockPeopleCounts: value)),
       ),
       SwitchListTile(
         title: const Text('短打卡/考古'),
@@ -267,9 +281,10 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
   );
 
   Widget _records({required bool blocked}) {
+    final playerController = _playerController!;
     final source = blocked
-        ? _playerController.danmakuAssistantHits
-        : _playerController.danmakuAssistantSamples;
+        ? playerController.danmakuAssistantHits
+        : playerController.danmakuAssistantSamples;
     final records = source.reversed.take(blocked ? 80 : 50).toList();
     if (records.isEmpty) {
       return const Padding(
@@ -281,7 +296,8 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
     return Column(
       children: records.map((record) {
         final match = record.match;
-        final removableMatch = blocked &&
+        final removableMatch =
+            blocked &&
                 match != null &&
                 match.rule != null &&
                 (match.kind == DanmakuAssistantKind.absolute ||
@@ -325,6 +341,28 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
 
   @override
   Widget build(BuildContext context) {
+    Widget content() => ListView(
+      children: [
+        if (_playerController != null) _stats(),
+        _sectionTitle('格式识别'),
+        _switches(),
+        _ruleSection(absolute: true),
+        _ruleSection(absolute: false),
+        if (_playerController != null) ...[
+          _sectionTitle('最近已拦截（最多 80 条）'),
+          _records(blocked: true),
+          _sectionTitle('最近读取的弹幕（点击 + 快速温和屏蔽）'),
+          _records(blocked: false),
+        ] else
+          const ListTile(
+            leading: Icon(Icons.preview_outlined),
+            title: Text('命中预览与统计'),
+            subtitle: Text('播放视频后，从播放器的弹幕菜单进入即可查看。'),
+          ),
+        const SizedBox(height: 32),
+      ],
+    );
+
     return SimpleScaffold(
       appBar: AppBar(
         title: const Text('弹幕屏蔽助手'),
@@ -336,23 +374,12 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
           ),
         ],
       ),
-      body: Obx(() {
-        final _ = _playerController.danmakuAssistantRevision.value;
-        return ListView(
-          children: [
-            _stats(),
-            _sectionTitle('格式识别'),
-            _switches(),
-            _ruleSection(absolute: true),
-            _ruleSection(absolute: false),
-            _sectionTitle('最近已拦截（最多 80 条）'),
-            _records(blocked: true),
-            _sectionTitle('最近读取的弹幕（点击 + 快速温和屏蔽）'),
-            _records(blocked: false),
-            const SizedBox(height: 32),
-          ],
-        );
-      }),
+      body: _playerController == null
+          ? content()
+          : Obx(() {
+              final _ = _playerController!.danmakuAssistantRevision.value;
+              return content();
+            }),
     );
   }
 }

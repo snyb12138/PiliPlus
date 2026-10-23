@@ -25,6 +25,7 @@ import 'package:PiliPlus/models/common/video/subtitle_pref_type.dart';
 import 'package:PiliPlus/models/common/video/video_decode_type.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
+import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/models/user/info.dart';
 import 'package:PiliPlus/pages/setting/pages/fullscreen_sc.dart'
     show kFullScreenSCWidth;
@@ -79,6 +80,14 @@ abstract final class Pref {
         _localCache.get(LocalCacheKey.danmakuAssistantConfig),
       );
 
+  static ReplyPurifyConfig get replyPurifyConfig =>
+      ReplyPurifyConfig.fromStorage(
+        _localCache.get(LocalCacheKey.replyPurifyConfig),
+      );
+
+  static Future<void> setReplyPurifyConfig(ReplyPurifyConfig config) =>
+      _localCache.put(LocalCacheKey.replyPurifyConfig, config.toStorage());
+
   static void setBlackMid(int mid) => _localCache.put(
     LocalCacheKey.blackMids,
     GlobalData().blackMids..add(mid),
@@ -131,10 +140,8 @@ abstract final class Pref {
     }
     return SegmentType.values
         .map(
-          (item) => Pair(
-            first: item,
-            second: SkipType.values[list[item.index]],
-          ),
+          (item) =>
+              Pair(first: item, second: SkipType.values[list[item.index]]),
         )
         .toList();
   }
@@ -144,13 +151,11 @@ abstract final class Pref {
     if (list == null || list.length != SegmentType.values.length) {
       return SegmentType.values.map((i) => i.color).toList();
     }
-    return SegmentType.values.map(
-      (item) {
-        final String e = list[item.index];
-        final color = e.isNotEmpty ? int.tryParse('FF$e', radix: 16) : null;
-        return color != null ? Color(color) : item.color;
-      },
-    ).toList();
+    return SegmentType.values.map((item) {
+      final String e = list[item.index];
+      final color = e.isNotEmpty ? int.tryParse('FF$e', radix: 16) : null;
+      return color != null ? Color(color) : item.color;
+    }).toList();
   }
 
   static bool get feedBackEnable =>
@@ -326,9 +331,8 @@ abstract final class Pref {
   static String get blockUserID {
     String? blockUserID = _setting.get(SettingBoxKey.blockUserID);
     if (blockUserID == null || blockUserID.isEmpty) {
-      blockUserID = Digest(
-        List.generate(16, (_) => Utils.random.nextInt(256)),
-      ).toString();
+      blockUserID = Digest(List.generate(16, (_) => Utils.random.nextInt(256)))
+          .toString();
       _setting.put(SettingBoxKey.blockUserID, blockUserID);
     }
     return blockUserID;

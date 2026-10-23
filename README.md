@@ -5,16 +5,15 @@
 
 
 <div align="center">
-    <h1>PiliPlus</h1>
+    <h1>PiliPlus Purify / PiliPlus 净化增强版</h1>
 <div align="center">
 
 中文 | [English](README.en.md)
 
-![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus) 
-![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus) 
-![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total) 
+![GitHub repo size](https://img.shields.io/github/repo-size/snyb12138/PiliPlus)
+![GitHub all releases](https://img.shields.io/github/downloads/snyb12138/PiliPlus/total)
 </div>
-    <p>使用Flutter开发的BiliBili第三方客户端</p>
+    <p>专注评论与弹幕降噪的 PiliPlus 社区分支</p>
     
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="home" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="home" />
@@ -26,6 +25,17 @@
 
 
 <br/>
+
+## 净化增强版
+
+本分支基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)（GPL-3.0）维护，目标是在尽量跟随上游更新的同时，提供透明、可撤销、仅在本机执行的评论与弹幕过滤能力。
+
+- 评论净化助手：长按评论即可仅屏蔽该账号的评论，不影响其视频、动态，也不写入哔哩哔哩账号黑名单；支持管理、撤销和导入导出。
+- 弹幕屏蔽助手：绝对/温和文字规则、日期打卡、时间打卡、人数刷屏和短打卡识别，并可在播放器中查看命中预览。
+- 隐私原则：不上传评论、弹幕或本地屏蔽列表，不调用云端模型判断内容。
+- 发行隔离：Android 使用独立应用 ID，可与上游 PiliPlus 同时安装；更新仅检查本仓库的 Releases。
+
+开发分支为 `purify`，发行标签使用 `purify-vX.Y.Z`。同步上游的方法见 [净化版维护说明](docs/PURIFY_MAINTENANCE.md)。
 
 ## 适配平台
 
@@ -215,7 +225,7 @@
 
 ## 下载
 
-可以从 [Releases](https://github.com/bggRGjQaUbCoE/PiliPlus/releases) 下载，或克隆仓库拉取代码后在本地编译。
+可以从 [净化增强版 Releases](https://github.com/snyb12138/PiliPlus/releases) 下载，或克隆仓库的 `purify` 分支后在本地编译。
 
 <br/>
 

@@ -50,6 +50,8 @@ import 'package:PiliPlus/pages/music/view.dart';
 import 'package:PiliPlus/pages/my_reply/view.dart';
 import 'package:PiliPlus/pages/popular_precious/view.dart';
 import 'package:PiliPlus/pages/popular_series/view.dart';
+import 'package:PiliPlus/pages/purify_center/view.dart';
+import 'package:PiliPlus/pages/reply_purify/view.dart';
 import 'package:PiliPlus/pages/search/view.dart';
 import 'package:PiliPlus/pages/search_result/view.dart';
 import 'package:PiliPlus/pages/search_trending/view.dart';
@@ -153,6 +155,8 @@ class Routes {
       name: '/danmakuAssistant',
       page: () => const DanmakuAssistantPage(),
     ),
+    GetPage(name: '/purifyCenter', page: () => const PurifyCenterPage()),
+    GetPage(name: '/replyPurify', page: () => const ReplyPurifyPage()),
     GetPage(name: '/sponsorBlock', page: () => const SponsorBlockPage()),
     GetPage(name: '/createFav', page: () => const CreateFavPage()),
     GetPage(name: '/editProfile', page: () => const EditProfilePage()),
