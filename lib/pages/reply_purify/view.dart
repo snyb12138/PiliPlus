@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
@@ -96,7 +97,59 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
       content: const Text('清空后，这些账号的评论会重新显示。'),
     );
     if (!confirmed) return;
-    await ReplyGrpc.replaceReplyPurifyConfig(ReplyPurifyConfig.defaults());
+    await ReplyGrpc.replaceReplyPurifyConfig(
+      _config.copyWith(mutedUsers: const {}),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleAiFilter(bool enabled) async {
+    await ReplyGrpc.setAiReplyFilterLevel(
+      enabled ? ReplyAiFilterLevel.balanced : ReplyAiFilterLevel.off,
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _selectAiFilterLevel() async {
+    final selected = await showDialog<ReplyAiFilterLevel>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('疑似 AI 评论检测强度'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final level in const [
+              ReplyAiFilterLevel.conservative,
+              ReplyAiFilterLevel.balanced,
+            ])
+              RadioListTile<ReplyAiFilterLevel>(
+                value: level,
+                groupValue: _config.aiFilterLevel,
+                title: Text(level.label),
+                subtitle: Text(
+                  level == ReplyAiFilterLevel.conservative
+                      ? '只折叠高置信度的模板化内容，误判更少'
+                      : '使用多项特征组合判断，可识别更隐蔽的内容',
+                ),
+                onChanged: (value) => Get.back(result: value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await ReplyGrpc.setAiReplyFilterLevel(selected);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _removeTrustedUser(ReplyPurifyUser user) async {
+    final confirmed = await showConfirmDialog(
+      context: context,
+      title: Text('取消信任 ${user.name.isEmpty ? user.mid : user.name}？'),
+      content: const Text('取消后，该账号的评论会重新参与 AI 特征检测。'),
+    );
+    if (!confirmed) return;
+    await ReplyGrpc.untrustAiReplyUser(user.mid);
     if (mounted) setState(() {});
   }
 
@@ -122,6 +175,9 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
   Widget build(BuildContext context) {
     final users = _config.mutedUsers.values.toList()
       ..sort((a, b) => a.mid.compareTo(b.mid));
+    final trustedUsers = _config.trustedAiUsers.values.toList()
+      ..sort((a, b) => a.mid.compareTo(b.mid));
+    final aiFilterEnabled = _config.aiFilterLevel != ReplyAiFilterLevel.off;
     final padding = MediaQuery.viewPaddingOf(context);
     return SimpleScaffold(
       appBar: AppBar(
@@ -142,6 +198,30 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
       body: ListView(
         padding: EdgeInsets.only(bottom: padding.bottom + 100),
         children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('折叠疑似 AI 低质量评论'),
+            subtitle: Text(
+              aiFilterEnabled
+                  ? '已启用·${_config.aiFilterLevel.label}模式；命中后仍可查看原文'
+                  : '默认关闭；所有检测均在本机完成',
+            ),
+            value: aiFilterEnabled,
+            onChanged: _toggleAiFilter,
+          ),
+          if (aiFilterEnabled)
+            ListTile(
+              leading: const Icon(Icons.tune_outlined),
+              title: const Text('检测强度'),
+              subtitle: const Text('优先使用组合特征，不会仅因为评论较长就折叠'),
+              trailing: Text(_config.aiFilterLevel.label),
+              onTap: _selectAiFilterLevel,
+            ),
+          const ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('检测结果可解释'),
+            subtitle: Text('折叠卡片会显示命中原因；可单次查看原文，或将账号加入本地信任列表。'),
+          ),
           const ListTile(
             leading: Icon(Icons.shield_outlined),
             title: Text('仅过滤评论，不加入全局黑名单'),
@@ -167,6 +247,27 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
                 ),
               ),
             ),
+          if (trustedUsers.isNotEmpty) ...[
+            const Divider(height: 24),
+            const ListTile(
+              leading: Icon(Icons.verified_user_outlined),
+              title: Text('AI 检测信任账号'),
+              subtitle: Text('这些账号不参与疑似 AI 评论检测'),
+            ),
+            ...trustedUsers.map(
+              (user) => ListTile(
+                onTap: () => Get.toNamed('/member?mid=${user.mid}'),
+                leading: const Icon(Icons.person_outline),
+                title: Text(user.name.isEmpty ? 'UID ${user.mid}' : user.name),
+                subtitle: user.name.isEmpty ? null : Text('UID ${user.mid}'),
+                trailing: IconButton(
+                  tooltip: '取消信任',
+                  onPressed: () => _removeTrustedUser(user),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       fab: Padding(

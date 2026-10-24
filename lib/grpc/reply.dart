@@ -4,7 +4,9 @@ import 'package:PiliPlus/grpc/bilibili/pagination.pb.dart';
 import 'package:PiliPlus/grpc/grpc_req.dart';
 import 'package:PiliPlus/grpc/url.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
@@ -37,6 +39,37 @@ abstract final class ReplyGrpc {
   static Future<void> replaceReplyPurifyConfig(ReplyPurifyConfig config) async {
     replyPurifyConfig = config;
     await Pref.setReplyPurifyConfig(config);
+  }
+
+  static Future<void> setAiReplyFilterLevel(ReplyAiFilterLevel level) async {
+    await replaceReplyPurifyConfig(replyPurifyConfig.setAiFilterLevel(level));
+  }
+
+  static Future<void> trustAiReplyUser(int mid, {String name = ''}) async {
+    if (mid <= 0) return;
+    await replaceReplyPurifyConfig(
+      replyPurifyConfig.trustAiUser(mid, name: name),
+    );
+  }
+
+  static Future<void> untrustAiReplyUser(int mid) async {
+    if (!replyPurifyConfig.trustsAiUser(mid)) return;
+    await replaceReplyPurifyConfig(replyPurifyConfig.untrustAiUser(mid));
+  }
+
+  static ReplyAiAssessment assessAiReply(ReplyInfo reply) =>
+      ReplyAiDetector.assess(reply.content.message);
+
+  static bool shouldFoldAiReply(
+    ReplyInfo reply, [
+    ReplyAiAssessment? assessment,
+  ]) {
+    final config = replyPurifyConfig;
+    final mid = reply.mid.toInt();
+    return config.aiFilterLevel != ReplyAiFilterLevel.off &&
+        mid != Accounts.main.mid &&
+        !config.trustsAiUser(mid) &&
+        (assessment ?? assessAiReply(reply)).matches(config.aiFilterLevel);
   }
 
   // static Future replyInfo({required int rpid}) {

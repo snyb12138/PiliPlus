@@ -1,3 +1,5 @@
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+
 class ReplyPurifyUser {
   const ReplyPurifyUser({required this.mid, this.name = ''});
 
@@ -30,8 +32,12 @@ class ReplyPurifyUser {
 }
 
 class ReplyPurifyConfig {
-  ReplyPurifyConfig({required Map<int, ReplyPurifyUser> mutedUsers})
-    : mutedUsers = Map.unmodifiable(mutedUsers);
+  ReplyPurifyConfig({
+    required Map<int, ReplyPurifyUser> mutedUsers,
+    this.aiFilterLevel = ReplyAiFilterLevel.off,
+    Map<int, ReplyPurifyUser> trustedAiUsers = const {},
+  }) : mutedUsers = Map.unmodifiable(mutedUsers),
+       trustedAiUsers = Map.unmodifiable(trustedAiUsers);
 
   factory ReplyPurifyConfig.defaults() => ReplyPurifyConfig(mutedUsers: {});
 
@@ -49,28 +55,76 @@ class ReplyPurifyConfig {
         // Ignore malformed entries instead of disabling the whole local list.
       }
     }
-    return ReplyPurifyConfig(mutedUsers: users);
+    final trustedUsers = <int, ReplyPurifyUser>{};
+    if (raw['trustedAiUsers'] case final Iterable values) {
+      for (final value in values) {
+        try {
+          final user = ReplyPurifyUser.fromStorage(value);
+          trustedUsers[user.mid] = user;
+        } on FormatException {
+          // Ignore malformed entries independently from the muted list.
+        }
+      }
+    }
+    return ReplyPurifyConfig(
+      mutedUsers: users,
+      aiFilterLevel: ReplyAiFilterLevel.fromStorage(raw['aiFilterLevel']),
+      trustedAiUsers: trustedUsers,
+    );
   }
 
   final Map<int, ReplyPurifyUser> mutedUsers;
+  final ReplyAiFilterLevel aiFilterLevel;
+  final Map<int, ReplyPurifyUser> trustedAiUsers;
 
   bool contains(int mid) => mutedUsers.containsKey(mid);
+  bool trustsAiUser(int mid) => trustedAiUsers.containsKey(mid);
 
   ReplyPurifyConfig addUser(int mid, {String name = ''}) {
     if (mid <= 0) return this;
     final users = Map<int, ReplyPurifyUser>.of(mutedUsers);
     users[mid] = ReplyPurifyUser(mid: mid, name: name.trim());
-    return ReplyPurifyConfig(mutedUsers: users);
+    return copyWith(mutedUsers: users);
   }
 
   ReplyPurifyConfig removeUser(int mid) {
     if (!mutedUsers.containsKey(mid)) return this;
     final users = Map<int, ReplyPurifyUser>.of(mutedUsers)..remove(mid);
-    return ReplyPurifyConfig(mutedUsers: users);
+    return copyWith(mutedUsers: users);
+  }
+
+  ReplyPurifyConfig setAiFilterLevel(ReplyAiFilterLevel level) =>
+      copyWith(aiFilterLevel: level);
+
+  ReplyPurifyConfig trustAiUser(int mid, {String name = ''}) {
+    if (mid <= 0) return this;
+    final users = Map<int, ReplyPurifyUser>.of(trustedAiUsers);
+    users[mid] = ReplyPurifyUser(mid: mid, name: name.trim());
+    return copyWith(trustedAiUsers: users);
+  }
+
+  ReplyPurifyConfig untrustAiUser(int mid) {
+    if (!trustedAiUsers.containsKey(mid)) return this;
+    final users = Map<int, ReplyPurifyUser>.of(trustedAiUsers)..remove(mid);
+    return copyWith(trustedAiUsers: users);
+  }
+
+  ReplyPurifyConfig copyWith({
+    Map<int, ReplyPurifyUser>? mutedUsers,
+    ReplyAiFilterLevel? aiFilterLevel,
+    Map<int, ReplyPurifyUser>? trustedAiUsers,
+  }) {
+    return ReplyPurifyConfig(
+      mutedUsers: mutedUsers ?? this.mutedUsers,
+      aiFilterLevel: aiFilterLevel ?? this.aiFilterLevel,
+      trustedAiUsers: trustedAiUsers ?? this.trustedAiUsers,
+    );
   }
 
   Map<String, Object> toStorage() => {
-    'version': 1,
+    'version': 2,
     'mutedUsers': mutedUsers.values.map((e) => e.toStorage()).toList(),
+    'aiFilterLevel': aiFilterLevel.name,
+    'trustedAiUsers': trustedAiUsers.values.map((e) => e.toStorage()).toList(),
   };
 }

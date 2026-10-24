@@ -1,4 +1,5 @@
 import 'package:PiliPlus/models/user/reply_purify.dart';
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -6,6 +7,8 @@ void main() {
     final config = ReplyPurifyConfig.defaults();
     expect(config.mutedUsers, isEmpty);
     expect(config.contains(123), isFalse);
+    expect(config.aiFilterLevel, ReplyAiFilterLevel.off);
+    expect(config.trustedAiUsers, isEmpty);
   });
 
   test('add and remove only affect the selected uid', () {
@@ -42,5 +45,30 @@ void main() {
 
     expect(restored.mutedUsers.length, 1);
     expect(restored.mutedUsers[123]?.name, '有效');
+  });
+
+  test('AI filter settings round trip and remain backward compatible', () {
+    final config = ReplyPurifyConfig.defaults()
+        .setAiFilterLevel(ReplyAiFilterLevel.balanced)
+        .trustAiUser(789, name: '可信账号');
+
+    final restored = ReplyPurifyConfig.fromStorage(config.toStorage());
+    expect(restored.aiFilterLevel, ReplyAiFilterLevel.balanced);
+    expect(restored.trustedAiUsers[789]?.name, '可信账号');
+
+    final legacy = ReplyPurifyConfig.fromStorage({
+      'version': 1,
+      'mutedUsers': const [],
+    });
+    expect(legacy.aiFilterLevel, ReplyAiFilterLevel.off);
+    expect(legacy.trustedAiUsers, isEmpty);
+  });
+
+  test('trusted AI users can be removed without changing muted users', () {
+    final config = ReplyPurifyConfig.defaults().addUser(123).trustAiUser(456);
+    final restored = config.untrustAiUser(456);
+
+    expect(restored.contains(123), isTrue);
+    expect(restored.trustsAiUser(456), isFalse);
   });
 }

@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -30,6 +31,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       danmaku.blockShortCheckIns,
     ].where((enabled) => enabled).length;
     final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
+    final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;
     final padding = MediaQuery.viewPaddingOf(context);
 
     return SimpleScaffold(
@@ -66,7 +68,10 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
                   onTap: () => _open('/replyPurify'),
                   leading: const Icon(Icons.comments_disabled_outlined),
                   title: const Text('评论净化助手'),
-                  subtitle: Text('$replyCount 个仅评论区屏蔽账号；支持长按评论快速加入、撤销和导入导出'),
+                  subtitle: Text(
+                    '$replyCount 个仅评论区屏蔽账号；'
+                    'AI 评论检测${aiFilterLevel == ReplyAiFilterLevel.off ? '未启用' : '已启用·${aiFilterLevel.label}'}',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                 ),
                 const Divider(height: 1),

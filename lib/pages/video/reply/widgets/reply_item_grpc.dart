@@ -21,6 +21,7 @@ import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/vote.dart';
 import 'package:PiliPlus/pages/member/widget/medal_widget.dart';
 import 'package:PiliPlus/pages/save_panel/view.dart';
@@ -60,6 +61,100 @@ import 'package:material_ui/material_ui.dart';
 import 'package:protobuf/protobuf.dart';
 
 part 'package:PiliPlus/common/widgets/context_menu/reply_menu_helper.dart';
+
+class _AiReplyFold extends StatefulWidget {
+  const _AiReplyFold({
+    super.key,
+    required this.reply,
+    required this.assessment,
+    required this.child,
+    this.compact = false,
+  });
+
+  final ReplyInfo reply;
+  final ReplyAiAssessment assessment;
+  final Widget child;
+  final bool compact;
+
+  @override
+  State<_AiReplyFold> createState() => _AiReplyFoldState();
+}
+
+class _AiReplyFoldState extends State<_AiReplyFold> {
+  var _revealed = false;
+
+  Future<void> _trustUser() async {
+    await ReplyGrpc.trustAiReplyUser(
+      widget.reply.mid.toInt(),
+      name: widget.reply.member.name,
+    );
+    if (!mounted) return;
+    setState(() => _revealed = true);
+    SmartDialog.showToast('已信任该账号，其评论不再参与 AI 检测');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_revealed ||
+        !ReplyGrpc.shouldFoldAiReply(widget.reply, widget.assessment)) {
+      return widget.child;
+    }
+
+    final colorScheme = ColorScheme.of(context);
+    final summary = widget.assessment.summary;
+    final child = Material(
+      type: MaterialType.transparency,
+      child: Padding(
+        padding: widget.compact
+            ? const .fromLTRB(8, 6, 8, 6)
+            : const .fromLTRB(14, 10, 12, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.auto_awesome_outlined,
+              size: widget.compact ? 16 : 20,
+              color: colorScheme.secondary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                summary.isEmpty
+                    ? '已折叠 @${widget.reply.member.name} 的疑似 AI 评论'
+                    : '已折叠 @${widget.reply.member.name}：$summary',
+                maxLines: widget.compact ? 2 : 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: widget.compact ? 12 : 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _revealed = true),
+              child: const Text('查看'),
+            ),
+            if (!widget.compact)
+              TextButton(onPressed: _trustUser, child: const Text('信任')),
+          ],
+        ),
+      ),
+    );
+    if (widget.compact) return child;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        child,
+        Divider(
+          indent: 55,
+          endIndent: 15,
+          height: 0.3,
+          color: colorScheme.outline.withValues(alpha: 0.08),
+        ),
+      ],
+    );
+  }
+}
 
 class ReplyItemGrpc extends StatelessWidget {
   const ReplyItemGrpc({
@@ -118,33 +213,47 @@ class ReplyItemGrpc extends StatelessWidget {
       },
     );
 
-    Widget child = Padding(
-      padding: const .fromLTRB(12, 14, 8, 5),
-      child: _buildContent(context, colorScheme),
-    );
-    if (needDivider) {
-      child = Column(
-        mainAxisSize: .min,
-        children: [
-          child,
-          Divider(
-            indent: 55,
-            endIndent: 15,
-            height: 0.3,
-            color: colorScheme.outline.withValues(alpha: 0.08),
-          ),
-        ],
+    Widget buildReply() {
+      Widget child = Padding(
+        padding: const .fromLTRB(12, 14, 8, 5),
+        child: _buildContent(context, colorScheme),
+      );
+      if (needDivider) {
+        child = Column(
+          mainAxisSize: .min,
+          children: [
+            child,
+            Divider(
+              indent: 55,
+              endIndent: 15,
+              height: 0.3,
+              color: colorScheme.outline.withValues(alpha: 0.08),
+            ),
+          ],
+        );
+      }
+      return Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () => replyReply?.call(replyItem, null),
+          onLongPress: showMore,
+          onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
+          child: child,
+        ),
       );
     }
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: () => replyReply?.call(replyItem, null),
-        onLongPress: showMore,
-        onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
-        child: child,
-      ),
-    );
+
+    final assessment = ReplyGrpc.assessAiReply(replyItem);
+    if (replyItem.mid != upMid &&
+        ReplyGrpc.shouldFoldAiReply(replyItem, assessment)) {
+      return _AiReplyFold(
+        key: ValueKey(replyItem.id),
+        reply: replyItem,
+        assessment: assessment,
+        child: buildReply(),
+      );
+    }
+    return buildReply();
   }
 
   Widget _buildHeader(BuildContext context, ColorScheme colorScheme) {
@@ -603,7 +712,7 @@ class ReplyItemGrpc extends StatelessWidget {
                     );
                   },
                 );
-                return InkWell(
+                final child = InkWell(
                   borderRadius: borderRadius,
                   onTap: () =>
                       replyReply?.call(replyItem, childReply.id.toInt()),
@@ -661,6 +770,18 @@ class ReplyItemGrpc extends StatelessWidget {
                     ),
                   ),
                 );
+                final assessment = ReplyGrpc.assessAiReply(childReply);
+                if (childReply.mid != upMid &&
+                    ReplyGrpc.shouldFoldAiReply(childReply, assessment)) {
+                  return _AiReplyFold(
+                    key: ValueKey(childReply.id),
+                    reply: childReply,
+                    assessment: assessment,
+                    compact: true,
+                    child: child,
+                  );
+                }
+                return child;
               }),
             if (extraRow)
               InkWell(
@@ -1157,6 +1278,37 @@ class ReplyItemGrpc extends StatelessWidget {
               title: Text(
                 '仅屏蔽其评论',
                 style: style.copyWith(color: colorScheme.primary),
+              ),
+            ),
+          if (ownerMid != item.member.mid &&
+              ReplyGrpc.replyPurifyConfig.aiFilterLevel !=
+                  ReplyAiFilterLevel.off)
+            ListTile(
+              onTap: () async {
+                final mid = item.mid.toInt();
+                final trusted = ReplyGrpc.replyPurifyConfig.trustsAiUser(mid);
+                if (trusted) {
+                  await ReplyGrpc.untrustAiReplyUser(mid);
+                } else {
+                  await ReplyGrpc.trustAiReplyUser(mid, name: item.member.name);
+                }
+                if (!context.mounted) return;
+                Get.back();
+                SmartDialog.showToast(trusted ? '已取消 AI 检测信任' : '已信任该账号');
+              },
+              minLeadingWidth: 0,
+              leading: Icon(
+                ReplyGrpc.replyPurifyConfig.trustsAiUser(item.mid.toInt())
+                    ? Icons.person_remove_outlined
+                    : Icons.verified_user_outlined,
+                color: colorScheme.secondary,
+                size: 19,
+              ),
+              title: Text(
+                ReplyGrpc.replyPurifyConfig.trustsAiUser(item.mid.toInt())
+                    ? '取消 AI 检测信任'
+                    : '不再自动折叠此账号',
+                style: style.copyWith(color: colorScheme.secondary),
               ),
             ),
           if (ownerMid == Int64.ZERO)
