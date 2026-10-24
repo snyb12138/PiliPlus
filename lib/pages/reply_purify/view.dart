@@ -128,8 +128,8 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
                 title: Text(level.label),
                 subtitle: Text(
                   level == ReplyAiFilterLevel.conservative
-                      ? '只折叠高置信度的模板或重复行为，误判更少'
-                      : '结合文本、昵称及重复 @ 行为，可识别更隐蔽的内容',
+                      ? '明确模型自述，或高置信度异常 @ 组合'
+                      : '必须先命中异常重复 @；文本和昵称只用于辅助加分',
                 ),
                 onChanged: (value) => Get.back(result: value),
               ),

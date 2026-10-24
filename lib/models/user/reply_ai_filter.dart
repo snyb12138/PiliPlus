@@ -51,7 +51,15 @@ class ReplyAiAssessment {
   final int score;
   final List<ReplyAiSignal> signals;
 
-  bool matches(ReplyAiFilterLevel level) => score >= level.threshold;
+  bool matches(ReplyAiFilterLevel level) {
+    if (level == ReplyAiFilterLevel.off || score < level.threshold) {
+      return false;
+    }
+    // Style can support a decision but cannot trigger one by itself. Explicit
+    // model disclosure is the only non-behavioral high-confidence exception.
+    return signals.contains(ReplyAiSignal.modelDisclosure) ||
+        signals.contains(ReplyAiSignal.repeatedMentionTarget);
+  }
 
   String get summary => signals.take(3).map((signal) => signal.label).join('、');
 }

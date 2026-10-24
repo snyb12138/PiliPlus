@@ -14,7 +14,7 @@ void main() {
     expect(result.matches(ReplyAiFilterLevel.conservative), isTrue);
   });
 
-  test('template-like long explanation matches balanced mode only', () {
+  test('style signals alone do not trigger filtering', () {
     const message =
         '只要把实力隐藏起来，装作实力不行但又喜欢玩游戏的玩家，'
         '系统就会识别出来，然后把你放进舒适的匹配池里面。'
@@ -24,7 +24,7 @@ void main() {
     final result = ReplyAiDetector.assess(message);
     expect(result.signals, contains(ReplyAiSignal.contrastTemplate));
     expect(result.signals, contains(ReplyAiSignal.causalChain));
-    expect(result.matches(ReplyAiFilterLevel.balanced), isTrue);
+    expect(result.matches(ReplyAiFilterLevel.balanced), isFalse);
     expect(result.matches(ReplyAiFilterLevel.conservative), isFalse);
   });
 
