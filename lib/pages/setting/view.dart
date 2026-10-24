@@ -47,11 +47,6 @@ class _SettingPageState extends State<SettingPage> {
       icon: Icon(Icons.privacy_tip_outlined),
     ),
     _SettingsModel(
-      type: .purifySetting,
-      subtitle: '评论净化、弹幕屏蔽助手、本地规则',
-      icon: Icon(Icons.auto_fix_high_outlined),
-    ),
-    _SettingsModel(
       type: .recommendSetting,
       subtitle: '推荐来源（web/app）、刷新保留内容、过滤器',
       icon: Icon(Icons.explore_outlined),

@@ -153,15 +153,47 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _removeMarkedUser(ReplyPurifyUser user) async {
+    await ReplyGrpc.unmarkReplyUser(user.mid);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _blockMarkedUser(ReplyPurifyUser user) async {
+    final added = await ReplyGrpc.muteReplyUser(user.mid, name: user.name);
+    if (!mounted) return;
+    if (added) {
+      setState(() {});
+      SmartDialog.showToast('已加入评论屏蔽列表');
+    } else {
+      SmartDialog.showToast('该账号已在评论屏蔽列表中');
+    }
+  }
+
+  String _mentionSummary(int mid) {
+    final entries = ReplyGrpc.mentionSummaryForUser(mid).entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    if (entries.isEmpty) return '当前会话尚未观察到 @ 行为';
+    return entries
+        .take(3)
+        .map((entry) => '@UID ${entry.key} ×${entry.value}')
+        .join('，');
+  }
+
   void _showImportExport() {
     showImportExportDialog<Map<String, dynamic>>(
       context,
-      title: '评论净化账号',
+      title: '评论净化配置',
       localFileName: () => 'reply_purify',
-      onExport: () => Utils.jsonEncoder.convert(_config.toStorage()),
+      onExport: () => Utils.jsonEncoder.convert({
+        ..._config.toStorage(),
+        'replyKeywordPattern': ReplyGrpc.replyRegExp.pattern,
+      }),
       onImport: (json) async {
         if (json['mutedUsers'] is! Iterable) {
           throw const FormatException('缺少 mutedUsers 列表');
+        }
+        if (json['replyKeywordPattern'] case final String pattern) {
+          await ReplyGrpc.setReplyKeywordPattern(pattern);
         }
         await ReplyGrpc.replaceReplyPurifyConfig(
           ReplyPurifyConfig.fromStorage(json),
@@ -176,6 +208,8 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
     final users = _config.mutedUsers.values.toList()
       ..sort((a, b) => a.mid.compareTo(b.mid));
     final trustedUsers = _config.trustedAiUsers.values.toList()
+      ..sort((a, b) => a.mid.compareTo(b.mid));
+    final markedUsers = _config.markedUsers.values.toList()
       ..sort((a, b) => a.mid.compareTo(b.mid));
     final aiFilterEnabled = _config.aiFilterLevel != ReplyAiFilterLevel.off;
     final padding = MediaQuery.viewPaddingOf(context);
@@ -228,10 +262,15 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
             subtitle: Text('规则只保存在本机；不会上传评论内容，也不会影响该用户的视频和动态。'),
           ),
           const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.comments_disabled_outlined),
+            title: Text('评论屏蔽账号（${users.length}）'),
+            subtitle: const Text('可通过评论昵称旁的屏蔽按钮直接添加'),
+          ),
           if (users.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: Text('暂无账号\n可在评论长按菜单中快速添加')),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Center(child: Text('暂无屏蔽账号')),
             )
           else
             ...users.map(
@@ -244,6 +283,45 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
                   tooltip: '取消屏蔽',
                   onPressed: () => _removeUser(user),
                   icon: const Icon(Icons.delete_outline),
+                ),
+              ),
+            ),
+          const Divider(height: 24),
+          ListTile(
+            leading: const Icon(Icons.flag_outlined),
+            title: Text('标记库（${markedUsers.length}）'),
+            subtitle: const Text('按 UID 排序；@ 行为统计仅显示当前运行会话'),
+          ),
+          if (markedUsers.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Center(child: Text('暂无标记账号')),
+            )
+          else
+            ...markedUsers.map(
+              (user) => ListTile(
+                onTap: () => Get.toNamed('/member?mid=${user.mid}'),
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(user.name.isEmpty ? 'UID ${user.mid}' : user.name),
+                subtitle: Text(
+                  user.name.isEmpty
+                      ? _mentionSummary(user.mid)
+                      : 'UID ${user.mid} · ${_mentionSummary(user.mid)}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: '加入评论屏蔽列表',
+                      onPressed: () => _blockMarkedUser(user),
+                      icon: const Icon(Icons.comments_disabled_outlined),
+                    ),
+                    IconButton(
+                      tooltip: '取消标记',
+                      onPressed: () => _removeMarkedUser(user),
+                      icon: const Icon(Icons.flag_outlined),
+                    ),
+                  ],
                 ),
               ),
             ),

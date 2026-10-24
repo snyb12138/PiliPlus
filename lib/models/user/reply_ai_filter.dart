@@ -242,6 +242,11 @@ class ReplyAiMentionTracker {
     return maxCount;
   }
 
+  Map<int, int> mentionCountsForAuthor(int authorMid) {
+    final counts = _counts[authorMid];
+    return counts == null ? const {} : Map.unmodifiable(counts);
+  }
+
   void clear() {
     _observedReplies.clear();
     _counts.clear();

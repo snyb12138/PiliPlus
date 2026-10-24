@@ -156,6 +156,87 @@ class _AiReplyFoldState extends State<_AiReplyFold> {
   }
 }
 
+class _ReplyPurifyQuickActions extends StatefulWidget {
+  const _ReplyPurifyQuickActions({
+    required this.reply,
+    this.onBlocked,
+    this.compact = false,
+  });
+
+  final ReplyInfo reply;
+  final VoidCallback? onBlocked;
+  final bool compact;
+
+  @override
+  State<_ReplyPurifyQuickActions> createState() =>
+      _ReplyPurifyQuickActionsState();
+}
+
+class _ReplyPurifyQuickActionsState
+    extends State<_ReplyPurifyQuickActions> {
+  Future<void> _block() async {
+    final added = await ReplyGrpc.muteReplyUser(
+      widget.reply.mid.toInt(),
+      name: widget.reply.member.name,
+    );
+    if (!mounted) return;
+    if (added) {
+      widget.onBlocked?.call();
+      SmartDialog.showToast('已屏蔽该账号的评论');
+    } else {
+      SmartDialog.showToast('该账号已在评论屏蔽列表中');
+    }
+  }
+
+  Future<void> _toggleMark() async {
+    final mid = widget.reply.mid.toInt();
+    final marked = ReplyGrpc.replyPurifyConfig.isMarked(mid);
+    if (marked) {
+      await ReplyGrpc.unmarkReplyUser(mid);
+    } else {
+      await ReplyGrpc.markReplyUser(mid, name: widget.reply.member.name);
+    }
+    if (!mounted) return;
+    setState(() {});
+    SmartDialog.showToast(marked ? '已取消标记' : '已加入标记库');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.reply.mid.toInt() == Accounts.main.mid) {
+      return const SizedBox.shrink();
+    }
+    final marked = ReplyGrpc.replyPurifyConfig.isMarked(
+      widget.reply.mid.toInt(),
+    );
+    final size = widget.compact ? 14.0 : 16.0;
+    final extent = widget.compact ? 24.0 : 28.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: '屏蔽其评论',
+          onPressed: _block,
+          iconSize: size,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints.tightFor(width: extent, height: extent),
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.comments_disabled_outlined),
+        ),
+        IconButton(
+          tooltip: marked ? '取消标记' : '加入标记库',
+          onPressed: _toggleMark,
+          iconSize: size,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints.tightFor(width: extent, height: extent),
+          visualDensity: VisualDensity.compact,
+          icon: Icon(marked ? Icons.flag : Icons.flag_outlined),
+        ),
+      ],
+    );
+  }
+}
+
 class ReplyItemGrpc extends StatelessWidget {
   const ReplyItemGrpc({
     super.key,
@@ -324,6 +405,10 @@ class ReplyItemGrpc extends StatelessWidget {
                         ),
                         padding: const .symmetric(horizontal: 6, vertical: 1.5),
                       ),
+                    _ReplyPurifyQuickActions(
+                      reply: replyItem,
+                      onBlocked: () => onDelete?.call(replyItem, null),
+                    ),
                   ],
                 ),
                 Text.rich(
@@ -740,6 +825,16 @@ class ReplyItemGrpc extends StatelessWidget {
                                   '/member?mid=${childReply.member.mid}',
                                 );
                               },
+                          ),
+                          const TextSpan(text: ' '),
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: _ReplyPurifyQuickActions(
+                              reply: childReply,
+                              compact: true,
+                              onBlocked: () =>
+                                  onDelete?.call(replyItem, index),
+                            ),
                           ),
                           if (childReply.mid == upMid) ...[
                             const TextSpan(text: ' '),
@@ -1244,41 +1339,6 @@ class ReplyItemGrpc extends StatelessWidget {
               minLeadingWidth: 0,
               leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
               title: Text('删除', style: style.copyWith(color: errorColor)),
-            ),
-          if (ownerMid != item.member.mid)
-            ListTile(
-              onTap: () async {
-                final confirmed = await showConfirmDialog(
-                  context: context,
-                  title: Text('仅在评论区屏蔽 @${item.member.name}？'),
-                  content: const Text(
-                    '该用户的评论将在本机隐藏，但不会影响其视频、动态或你的哔哩哔哩账号黑名单。可在“设置 → 净化中心”中撤销。',
-                  ),
-                );
-                if (!confirmed) return;
-                final added = await ReplyGrpc.muteReplyUser(
-                  item.mid.toInt(),
-                  name: item.member.name,
-                );
-                if (!context.mounted) return;
-                Get.back();
-                if (added) {
-                  onDelete();
-                  SmartDialog.showToast('已仅屏蔽该用户的评论');
-                } else {
-                  SmartDialog.showToast('该用户已在评论净化列表中');
-                }
-              },
-              minLeadingWidth: 0,
-              leading: Icon(
-                Icons.comments_disabled_outlined,
-                color: colorScheme.primary,
-                size: 19,
-              ),
-              title: Text(
-                '仅屏蔽其评论',
-                style: style.copyWith(color: colorScheme.primary),
-              ),
             ),
           if (ownerMid != item.member.mid &&
               ReplyGrpc.replyPurifyConfig.aiFilterLevel !=

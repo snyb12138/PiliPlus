@@ -9,6 +9,8 @@ void main() {
     expect(config.contains(123), isFalse);
     expect(config.aiFilterLevel, ReplyAiFilterLevel.off);
     expect(config.trustedAiUsers, isEmpty);
+    expect(config.markedUsers, isEmpty);
+    expect(config.centerMode, ReplyPurifyCenterMode.expanded);
   });
 
   test('add and remove only affect the selected uid', () {
@@ -62,6 +64,18 @@ void main() {
     });
     expect(legacy.aiFilterLevel, ReplyAiFilterLevel.off);
     expect(legacy.trustedAiUsers, isEmpty);
+  });
+
+  test('marked users and hub mode survive storage round trip', () {
+    final config = ReplyPurifyConfig.defaults()
+        .markUser(321, name: '待检查账号')
+        .setCenterMode(ReplyPurifyCenterMode.hidden);
+
+    final restored = ReplyPurifyConfig.fromStorage(config.toStorage());
+    expect(restored.markedUsers[321]?.name, '待检查账号');
+    expect(restored.centerMode, ReplyPurifyCenterMode.hidden);
+    expect(restored.isMarked(321), isTrue);
+    expect(restored.unmarkUser(321).isMarked(321), isFalse);
   });
 
   test('trusted AI users can be removed without changing muted users', () {

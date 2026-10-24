@@ -27,7 +27,8 @@ flutter test
 3. 设置页中的“净化中心”。
 4. `DanmakuAssistantConfig` 与播放器加载弹幕时的本地匹配。
 5. 本仓库的应用 ID、更新地址和发行文件名。
-6. `ReplyAiDetector` 的本地评分规则、`ReplyAiMentionTracker` 的会话内重复 @ 统计、评论折叠卡片和 AI 检测信任列表。
+6. 评论区顶部屏蔽中心、昵称旁快捷操作、评论关键词及标记库。
+7. `ReplyAiDetector` 的本地评分规则、`ReplyAiMentionTracker` 的会话内重复 @ 统计、评论折叠卡片和 AI 检测信任列表。
 
 ## 首次发行
 

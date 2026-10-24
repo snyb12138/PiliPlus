@@ -7,10 +7,13 @@ import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
+import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/pages/common/fab_mixin.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/pages/video/reply/vote/reply_vote_item.dart';
+import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:get/get.dart';
@@ -65,9 +68,15 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
 
   late double bottom;
 
+  Future<void> _restorePurifyHub() async {
+    await ReplyGrpc.setPurifyCenterMode(ReplyPurifyCenterMode.collapsed);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final purifyMode = ReplyGrpc.replyPurifyConfig.centerMode;
     return fabAnimWrapper(
       child: refreshIndicator(
         onRefresh: _videoReplyController.onRefresh,
@@ -93,7 +102,19 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                           sortType.desc,
                           style: const TextStyle(fontSize: 13),
                         ),
-                        TextButton.icon(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (purifyMode == ReplyPurifyCenterMode.hidden)
+                              IconButton(
+                                tooltip: '显示屏蔽中心',
+                                onPressed: _restorePurifyHub,
+                                icon: const Icon(
+                                  Icons.shield_outlined,
+                                  size: 18,
+                                ),
+                              ),
+                            TextButton.icon(
                           style: Style.buttonStyle,
                           onPressed: _videoReplyController.queryBySort,
                           icon: Icon(
@@ -108,12 +129,22 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                               color: colorScheme.secondary,
                             ),
                           ),
+                            ),
+                          ],
                         ),
                       ],
                     );
                   }),
                 ),
               ),
+              if (purifyMode != ReplyPurifyCenterMode.hidden)
+                SliverToBoxAdapter(
+                  child: ReplyPurifyHubCard(
+                    onChanged: () {
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ),
               Obx(() => _buildBody(_videoReplyController.loadingState.value)),
             ],
           ),

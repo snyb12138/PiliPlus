@@ -8,6 +8,8 @@ import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
 
@@ -58,6 +60,37 @@ abstract final class ReplyGrpc {
     if (!replyPurifyConfig.trustsAiUser(mid)) return;
     await replaceReplyPurifyConfig(replyPurifyConfig.untrustAiUser(mid));
   }
+
+  static Future<bool> markReplyUser(int mid, {String name = ''}) async {
+    if (mid <= 0 || replyPurifyConfig.isMarked(mid)) return false;
+    await replaceReplyPurifyConfig(
+      replyPurifyConfig.markUser(mid, name: name),
+    );
+    return true;
+  }
+
+  static Future<bool> unmarkReplyUser(int mid) async {
+    if (!replyPurifyConfig.isMarked(mid)) return false;
+    await replaceReplyPurifyConfig(replyPurifyConfig.unmarkUser(mid));
+    return true;
+  }
+
+  static Future<void> setPurifyCenterMode(
+    ReplyPurifyCenterMode mode,
+  ) async {
+    await replaceReplyPurifyConfig(replyPurifyConfig.setCenterMode(mode));
+  }
+
+  static Future<void> setReplyKeywordPattern(String pattern) async {
+    final value = pattern.trim();
+    final regexp = RegExp(value, caseSensitive: false);
+    replyRegExp = regexp;
+    enableFilter = value.isNotEmpty;
+    await GStorage.setting.put(SettingBoxKey.banWordForReply, value);
+  }
+
+  static Map<int, int> mentionSummaryForUser(int mid) =>
+      _aiMentionTracker.mentionCountsForAuthor(mid);
 
   static ReplyAiAssessment assessAiReply(ReplyInfo reply) {
     final mentionedMids = reply.content.atNameToMid.values.map(
