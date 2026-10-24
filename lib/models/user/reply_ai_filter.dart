@@ -28,6 +28,8 @@ enum ReplyAiFilterLevel {
 
 enum ReplyAiSignal {
   modelDisclosure('模型或 AI 自述'),
+  fishLikeNickname('昵称含“鱼”类特征词'),
+  repeatedMentionTarget('多次 @ 同一账号'),
   cannedOpening('模板化开头'),
   cannedClosing('模板化结尾'),
   structuredList('机械分点'),
@@ -55,6 +57,8 @@ class ReplyAiAssessment {
 }
 
 abstract final class ReplyAiDetector {
+  static final RegExp _strongFishNickname = RegExp(r'肥鱼|鲸鱼娘|鲸鱼|鱼娘|鱼鱼');
+  static final RegExp _fishNickname = RegExp(r'鱼');
   static final RegExp _modelDisclosure = RegExp(
     r'(?:作为.{0,8}(?:AI|人工智能|语言模型))|'
     r'(?:(?:DeepSeek|豆包|文心一言|通义千问).{0,12}(?:生成|回答|总结|模型))|'
@@ -96,7 +100,11 @@ abstract final class ReplyAiDetector {
   ];
   static final RegExp _clausePunctuation = RegExp(r'[，。！？；,.!?;]');
 
-  static ReplyAiAssessment assess(String rawMessage) {
+  static ReplyAiAssessment assess(
+    String rawMessage, {
+    String nickname = '',
+    int repeatedMentionCount = 0,
+  }) {
     final message = rawMessage.trim();
     if (message.isEmpty) return ReplyAiAssessment.none;
 
@@ -111,6 +119,19 @@ abstract final class ReplyAiDetector {
 
     if (_modelDisclosure.hasMatch(message)) {
       add(ReplyAiSignal.modelDisclosure, 8);
+    }
+    if (_strongFishNickname.hasMatch(nickname)) {
+      add(ReplyAiSignal.fishLikeNickname, 2);
+    } else if (_fishNickname.hasMatch(nickname)) {
+      // A single common character is intentionally weak evidence. It only
+      // becomes actionable when combined with repeated mentions or text
+      // patterns.
+      add(ReplyAiSignal.fishLikeNickname, 1);
+    }
+    if (repeatedMentionCount >= 3) {
+      add(ReplyAiSignal.repeatedMentionTarget, 6);
+    } else if (repeatedMentionCount >= 2) {
+      add(ReplyAiSignal.repeatedMentionTarget, 4);
     }
     if (_cannedOpening.hasMatch(message)) {
       add(ReplyAiSignal.cannedOpening, 3);
@@ -157,5 +178,64 @@ abstract final class ReplyAiDetector {
     }
 
     return ReplyAiAssessment(score: score, signals: List.unmodifiable(signals));
+  }
+}
+
+/// Tracks repeated mentions during the current app session.
+///
+/// Each reply is counted once, even when a page rebuilds or is refreshed. The
+/// bounded store resets itself instead of allowing browsing history to grow
+/// without limit.
+class ReplyAiMentionTracker {
+  ReplyAiMentionTracker({this.maxObservedReplies = 1200});
+
+  final int maxObservedReplies;
+  final Set<(int, int)> _observedReplies = {};
+  final Map<int, Map<int, int>> _counts = {};
+
+  void observe({
+    required int oid,
+    required int replyId,
+    required int authorMid,
+    required Iterable<int> mentionedMids,
+  }) {
+    if (replyId <= 0 || authorMid <= 0) return;
+
+    final replyKey = (oid, replyId);
+    if (_observedReplies.contains(replyKey)) return;
+    if (_observedReplies.length >= maxObservedReplies) {
+      clear();
+    }
+    _observedReplies.add(replyKey);
+
+    final targets = mentionedMids
+        .where((mid) => mid > 0 && mid != authorMid)
+        .toSet();
+    if (targets.isEmpty) return;
+
+    final authorCounts = _counts.putIfAbsent(authorMid, () => {});
+    for (final targetMid in targets) {
+      authorCounts.update(targetMid, (count) => count + 1, ifAbsent: () => 1);
+    }
+  }
+
+  int repeatedMentionCount({
+    required int authorMid,
+    required Iterable<int> mentionedMids,
+  }) {
+    final authorCounts = _counts[authorMid];
+    if (authorCounts == null) return 0;
+
+    var maxCount = 0;
+    for (final targetMid in mentionedMids.toSet()) {
+      final count = authorCounts[targetMid] ?? 0;
+      if (count > maxCount) maxCount = count;
+    }
+    return maxCount;
+  }
+
+  void clear() {
+    _observedReplies.clear();
+    _counts.clear();
   }
 }

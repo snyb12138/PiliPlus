@@ -21,6 +21,8 @@ abstract final class ReplyGrpc {
   );
   static bool enableFilter = replyRegExp.pattern.isNotEmpty;
   static ReplyPurifyConfig replyPurifyConfig = Pref.replyPurifyConfig;
+  static final ReplyAiMentionTracker _aiMentionTracker =
+      ReplyAiMentionTracker();
 
   static Future<bool> muteReplyUser(int mid, {String name = ''}) async {
     if (mid <= 0 || replyPurifyConfig.contains(mid)) return false;
@@ -57,8 +59,37 @@ abstract final class ReplyGrpc {
     await replaceReplyPurifyConfig(replyPurifyConfig.untrustAiUser(mid));
   }
 
-  static ReplyAiAssessment assessAiReply(ReplyInfo reply) =>
-      ReplyAiDetector.assess(reply.content.message);
+  static ReplyAiAssessment assessAiReply(ReplyInfo reply) {
+    final mentionedMids = reply.content.atNameToMid.values.map(
+      (mid) => mid.toInt(),
+    );
+    return ReplyAiDetector.assess(
+      reply.content.message,
+      nickname: reply.member.name,
+      repeatedMentionCount: _aiMentionTracker.repeatedMentionCount(
+        authorMid: reply.mid.toInt(),
+        mentionedMids: mentionedMids,
+      ),
+    );
+  }
+
+  static void _observeAiReply(ReplyInfo reply) {
+    _aiMentionTracker.observe(
+      oid: reply.oid.toInt(),
+      replyId: reply.id.toInt(),
+      authorMid: reply.mid.toInt(),
+      mentionedMids: reply.content.atNameToMid.values.map((mid) => mid.toInt()),
+    );
+    for (final child in reply.replies) {
+      _observeAiReply(child);
+    }
+  }
+
+  static void _observeAiReplies(Iterable<ReplyInfo> replies) {
+    for (final reply in replies) {
+      _observeAiReply(reply);
+    }
+  }
 
   static bool shouldFoldAiReply(
     ReplyInfo reply, [
@@ -181,6 +212,11 @@ abstract final class ReplyGrpc {
       MainListReply.fromBuffer,
     );
     if (res case Success(:final response)) {
+      if (response.hasUpTop()) {
+        _observeAiReply(response.upTop);
+      }
+      _observeAiReplies(response.replies);
+
       // keyword filter
       if (response.hasUpTop() && needRemoveGrpc(response.upTop)) {
         response.clearUpTop();
@@ -220,7 +256,11 @@ abstract final class ReplyGrpc {
       ),
       DetailListReply.fromBuffer,
     );
-    return res..dataOrNull?.root.replies.removeWhere(needRemoveGrpc);
+    if (res.dataOrNull case final response?) {
+      _observeAiReplies(response.root.replies);
+      response.root.replies.removeWhere(needRemoveGrpc);
+    }
+    return res;
   }
 
   static Future<LoadingState<DialogListReply>> dialogList({
@@ -241,7 +281,11 @@ abstract final class ReplyGrpc {
       ),
       DialogListReply.fromBuffer,
     );
-    return res..dataOrNull?.replies.removeWhere(needRemoveGrpc);
+    if (res.dataOrNull case final response?) {
+      _observeAiReplies(response.replies);
+      response.replies.removeWhere(needRemoveGrpc);
+    }
+    return res;
   }
 
   static Future<LoadingState<SearchItemReply>> searchItem({

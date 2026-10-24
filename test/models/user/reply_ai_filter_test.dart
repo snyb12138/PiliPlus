@@ -33,4 +33,66 @@ void main() {
     final result = ReplyAiDetector.assess(message);
     expect(result.matches(ReplyAiFilterLevel.balanced), isFalse);
   });
+
+  test('fish-like nickname alone is only weak evidence', () {
+    final result = ReplyAiDetector.assess('视频做得不错', nickname: '摸鱼爱好者');
+    expect(result.signals, contains(ReplyAiSignal.fishLikeNickname));
+    expect(result.matches(ReplyAiFilterLevel.balanced), isFalse);
+  });
+
+  test('strong nickname plus two repeated mentions matches balanced mode', () {
+    final result = ReplyAiDetector.assess(
+      '@主账号 说得很对',
+      nickname: '肥鱼助手',
+      repeatedMentionCount: 2,
+    );
+    expect(result.signals, contains(ReplyAiSignal.fishLikeNickname));
+    expect(result.signals, contains(ReplyAiSignal.repeatedMentionTarget));
+    expect(result.matches(ReplyAiFilterLevel.balanced), isTrue);
+    expect(result.matches(ReplyAiFilterLevel.conservative), isFalse);
+  });
+
+  test(
+    'three repeated mentions and strong nickname match conservative mode',
+    () {
+      final result = ReplyAiDetector.assess(
+        '@主账号 我也这么认为',
+        nickname: '鲸鱼娘-07',
+        repeatedMentionCount: 3,
+      );
+      expect(result.matches(ReplyAiFilterLevel.conservative), isTrue);
+    },
+  );
+
+  test('mention tracker counts distinct replies only', () {
+    final tracker = ReplyAiMentionTracker(maxObservedReplies: 10);
+
+    tracker.observe(
+      oid: 1,
+      replyId: 100,
+      authorMid: 20,
+      mentionedMids: const [30],
+    );
+    tracker.observe(
+      oid: 1,
+      replyId: 100,
+      authorMid: 20,
+      mentionedMids: const [30],
+    );
+    expect(
+      tracker.repeatedMentionCount(authorMid: 20, mentionedMids: const [30]),
+      1,
+    );
+
+    tracker.observe(
+      oid: 1,
+      replyId: 101,
+      authorMid: 20,
+      mentionedMids: const [30],
+    );
+    expect(
+      tracker.repeatedMentionCount(authorMid: 20, mentionedMids: const [30]),
+      2,
+    );
+  });
 }

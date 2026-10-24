@@ -128,8 +128,8 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
                 title: Text(level.label),
                 subtitle: Text(
                   level == ReplyAiFilterLevel.conservative
-                      ? '只折叠高置信度的模板化内容，误判更少'
-                      : '使用多项特征组合判断，可识别更隐蔽的内容',
+                      ? '只折叠高置信度的模板或重复行为，误判更少'
+                      : '结合文本、昵称及重复 @ 行为，可识别更隐蔽的内容',
                 ),
                 onChanged: (value) => Get.back(result: value),
               ),
@@ -220,7 +220,7 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('检测结果可解释'),
-            subtitle: Text('折叠卡片会显示命中原因；可单次查看原文，或将账号加入本地信任列表。'),
+            subtitle: Text('折叠卡片会显示命中原因；重复 @ 仅在当前运行会话内统计，昵称或单次 @ 不会单独触发。'),
           ),
           const ListTile(
             leading: Icon(Icons.shield_outlined),
