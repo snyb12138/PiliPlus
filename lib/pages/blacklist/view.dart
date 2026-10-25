@@ -70,7 +70,16 @@ class _BlackListPageState extends State<BlackListPage>
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      appBar: AppBar(title: const Text('黑名单管理')),
+      appBar: AppBar(
+        title: const Text('黑名单管理'),
+        actions: [
+          IconButton(
+            tooltip: '导出完整UP主黑名单',
+            onPressed: _exportAllBlackMidsFile,
+            icon: const Icon(Icons.file_download_outlined),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           TabBar(
@@ -121,7 +130,11 @@ class _BlackListPageState extends State<BlackListPage>
       SmartDialog.showToast(e.toString());
       return;
     }
-    _blackListController.blackMids.add(intMid);
+    if (intMid <= 0) {
+      SmartDialog.showToast('UID 必须为正整数');
+      return;
+    }
+    _blackListController.addBlackMids([intMid]);
     SmartDialog.showToast('屏蔽成功');
     setState(() {});
   }
@@ -153,16 +166,34 @@ class _BlackListPageState extends State<BlackListPage>
   void _showImportExportDialog() {
     showImportExportDialog<List>(
       context,
-      title: '黑名单',
+      title: '本地UP主黑名单',
       localFileName: () => 'blackMids',
-      onExport: () =>
-          Utils.jsonEncoder.convert(_blackListController.blackMids.toList()),
+      onExport: () {
+        final mids = _blackListController.blackMids.toList()..sort();
+        return Utils.jsonEncoder.convert(mids);
+      },
       onImport: (json) {
-        final mids = Set<int>.from(json);
-        _blackListController.blackMids.addAll(mids);
+        _blackListController.addBlackMids(parseBlackMids(json));
         setState(() {});
       },
     );
+  }
+
+  Future<void> _exportAllBlackMidsFile() async {
+    SmartDialog.showLoading(msg: '正在汇总UP主黑名单…');
+    try {
+      final mids =
+          (await _blackListController.collectAllBlackMidsForExport()).toList()
+            ..sort();
+      SmartDialog.dismiss();
+      exportToLocalFile(
+        onExport: () => Utils.jsonEncoder.convert(mids),
+        localFileName: () => 'blackMids',
+      );
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast('导出失败：$e');
+    }
   }
 
   Widget get _local {
@@ -177,7 +208,7 @@ class _BlackListPageState extends State<BlackListPage>
           mainAxisSize: .min,
           children: [
             FloatingActionButton(
-              tooltip: '导入/导出',
+              tooltip: '本地名单导入/导出',
               onPressed: _showImportExportDialog,
               child: const Icon(Icons.swap_vert, size: 26),
             ),
@@ -214,7 +245,7 @@ class _BlackListPageState extends State<BlackListPage>
                         context: context,
                         title: const Text('确定移除该用户？'),
                         onConfirm: () {
-                          _blackListController.blackMids.remove(mid);
+                          _blackListController.removeBlackMid(mid);
                           setState(() {});
                         },
                       ),
@@ -284,7 +315,7 @@ class _BlackListPageState extends State<BlackListPage>
                           item.mid,
                         );
                         if (mounted && removed) {
-                          if (_blackListController.blackMids.remove(item.mid)) {
+                          if (_blackListController.removeBlackMid(item.mid!)) {
                             setState(() {});
                           }
                         }

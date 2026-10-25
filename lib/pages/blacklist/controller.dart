@@ -17,6 +17,50 @@ class BlackListController
   int? _total;
   final blackMids = GlobalData().blackMids;
 
+  void addBlackMids(Iterable<int> mids) {
+    blackMids.addAll(mids.where((mid) => mid > 0));
+    Pref.blackMids = blackMids;
+  }
+
+  bool removeBlackMid(int mid) {
+    final removed = blackMids.remove(mid);
+    if (removed) Pref.blackMids = blackMids;
+    return removed;
+  }
+
+  /// 拉取账号侧完整在线黑名单，并与本地投稿过滤名单合并后导出。
+  Future<Set<int>> collectAllBlackMidsForExport() async {
+    final mids = Set<int>.of(blackMids);
+    if (!Accounts.main.isLogin) return mids;
+
+    var loaded = 0;
+    int? total;
+    for (var pn = 1; pn <= 1000; pn++) {
+      final result = await BlackHttp.blackList(pn: pn);
+      if (result case Success(:final response)) {
+        final items = response.list ?? const <BlackListItem>[];
+        mids.addAll(
+          items.map((item) => item.mid).whereType<int>().where((mid) => mid > 0),
+        );
+        loaded += items.length;
+        total = response.total ?? total;
+        if (items.isEmpty && total != null && loaded < total) {
+          throw StateError('在线黑名单数量异常，已读取 $loaded/$total 项');
+        }
+        if (items.isEmpty || (total != null && loaded >= total)) {
+          blackMids.addAll(mids);
+          Pref.blackMids = blackMids;
+          return mids;
+        }
+      } else {
+        throw StateError(result.toString());
+      }
+    }
+
+    final progress = total == null ? '$loaded 项' : '$loaded/$total 项';
+    throw StateError('在线黑名单分页超过安全上限，已读取 $progress');
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -71,4 +115,25 @@ class BlackListController
     }
     Pref.blackMids = blackMids;
   }
+}
+
+Set<int> parseBlackMids(Iterable<Object?> values) {
+  final mids = <int>{};
+  var index = 0;
+  for (final value in values) {
+    index++;
+    final int? mid;
+    if (value is int) {
+      mid = value;
+    } else if (value is String) {
+      mid = int.tryParse(value.trim());
+    } else {
+      mid = null;
+    }
+    if (mid == null || mid <= 0) {
+      throw FormatException('第 $index 项不是有效的正整数 UID');
+    }
+    mids.add(mid);
+  }
+  return mids;
 }
