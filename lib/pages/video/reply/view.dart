@@ -6,13 +6,14 @@ import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
-    show ReplyInfo;
+    show MainListReply, ReplyInfo;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/pages/common/fab_mixin.dart';
+import 'package:PiliPlus/pages/common/reply/reply_footer_mixin.dart';
+import 'package:PiliPlus/pages/common/reply/vote/reply_vote_item.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
-import 'package:PiliPlus/pages/video/reply/vote/reply_vote_item.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
@@ -40,9 +41,12 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         AutomaticKeepAliveClientMixin,
         SingleTickerProviderStateMixin,
         BaseFabMixin,
-        FabMixin {
+        FabMixin,
+        ReplyFooterMixin<VideoReplyPanel, MainListReply> {
+  @override
   late ColorScheme colorScheme;
-  late VideoReplyController _videoReplyController;
+  @override
+  late VideoReplyController controller;
 
   String get heroTag => widget.heroTag;
 
@@ -52,21 +56,18 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   @override
   void initState() {
     super.initState();
-    _videoReplyController = Get.find<VideoReplyController>(tag: heroTag);
-    if (_videoReplyController.loadingState.value is Loading) {
-      _videoReplyController.queryData();
+    controller = Get.find<VideoReplyController>(tag: heroTag);
+    if (controller.loadingState.value is Loading) {
+      controller.queryData();
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _videoReplyController.didChangeDependencies(context);
+    controller.didChangeDependencies(context);
     colorScheme = ColorScheme.of(context);
-    bottom = MediaQuery.viewPaddingOf(context).bottom;
   }
-
-  late double bottom;
 
   Future<void> _restorePurifyHub() async {
     await ReplyGrpc.setPurifyCenterMode(ReplyPurifyCenterMode.collapsed);
@@ -79,13 +80,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     final purifyMode = ReplyGrpc.replyPurifyConfig.centerMode;
     return fabAnimWrapper(
       child: refreshIndicator(
-        onRefresh: _videoReplyController.onRefresh,
+        onRefresh: controller.onRefresh,
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
           body: CustomScrollView(
-            controller: widget.isNested
-                ? null
-                : _videoReplyController.scrollController,
+            controller: widget.isNested ? null : controller.scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             key: const PageStorageKey(_VideoReplyPanelState),
             slivers: [
@@ -94,7 +93,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 child: Padding(
                   padding: const .fromLTRB(12, 2.5, 6, 2.5),
                   child: Obx(() {
-                    final sortType = _videoReplyController.sortType.value;
+                    final sortType = controller.sortType.value;
                     return Row(
                       mainAxisAlignment: .spaceBetween,
                       children: [
@@ -115,20 +114,20 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                                 ),
                               ),
                             TextButton.icon(
-                          style: Style.buttonStyle,
-                          onPressed: _videoReplyController.queryBySort,
-                          icon: Icon(
-                            Icons.sort,
-                            size: 16,
-                            color: colorScheme.secondary,
-                          ),
-                          label: Text(
-                            sortType.descShort,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colorScheme.secondary,
-                            ),
-                          ),
+                              style: Style.buttonStyle,
+                              onPressed: controller.queryBySort,
+                              icon: Icon(
+                                Icons.sort,
+                                size: 16,
+                                color: colorScheme.secondary,
+                              ),
+                              label: Text(
+                                sortType.descShort,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colorScheme.secondary,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -145,7 +144,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     },
                   ),
                 ),
-              Obx(() => _buildBody(_videoReplyController.loadingState.value)),
+              Obx(() => _buildBody(controller.loadingState.value)),
             ],
           ),
           fab: SlideTransition(
@@ -153,17 +152,17 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             child: Padding(
               padding: .only(
                 right: kFloatingActionButtonMargin,
-                bottom: kFloatingActionButtonMargin + bottom,
+                bottom: kFloatingActionButtonMargin + padding.bottom,
               ),
               child: FloatingActionButton(
                 heroTag: null,
                 onPressed: () {
                   feedBack();
-                  _videoReplyController.onReply(
+                  controller.onReply(
                     null,
-                    oid: _videoReplyController.aid,
-                    replyType: _videoReplyController.videoType.replyType,
-                    mentionItem: _videoReplyController.mentionItem,
+                    oid: controller.aid,
+                    replyType: controller.videoType.replyType,
+                    mentionItem: controller.mentionItem,
                   );
                 },
                 tooltip: '发表评论',
@@ -189,7 +188,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
       case Success(:final response):
         if (response != null && response.isNotEmpty) {
           var count = response.length + 1;
-          final voteCard = _videoReplyController.voteCard;
+          final voteCard = controller.voteCard;
           final hasVote = voteCard != null;
           if (hasVote) {
             count++;
@@ -204,38 +203,28 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 }
               }
               if (index == response.length) {
-                _videoReplyController.onLoadMore();
-                return Container(
-                  height: 125,
-                  alignment: .center,
-                  margin: .only(bottom: bottom),
-                  child: Text(
-                    _videoReplyController.isEnd ? '没有更多了' : '加载中...',
-                    textAlign: .center,
-                    style: TextStyle(fontSize: 12, color: colorScheme.outline),
-                  ),
-                );
+                return buildFooter();
               } else {
                 final item = response[index];
                 final child = ReplyItemGrpc(
                   replyItem: item,
                   replyLevel: widget.replyLevel,
-                  replyReply: _videoReplyController.replyReply,
-                  onReply: _videoReplyController.onReply,
+                  replyReply: controller.replyReply,
+                  onReply: controller.onReply,
                   onDelete: (item, subIndex) =>
-                      _videoReplyController.onRemove(index, item, subIndex),
-                  upMid: _videoReplyController.upMid,
+                      controller.onRemove(index, item, subIndex),
+                  upMid: controller.upMid,
                   getTag: () => heroTag,
-                  onCheckReply: _videoReplyController.onCheckReply,
-                  onToggleTop: (item) => _videoReplyController.onToggleTop(
+                  onCheckReply: controller.onCheckReply,
+                  onToggleTop: (item) => controller.onToggleTop(
                     item,
                     index,
-                    _videoReplyController.aid,
-                    _videoReplyController.videoType.replyType,
+                    controller.aid,
+                    controller.videoType.replyType,
                   ),
                 );
-                if (item.id == _videoReplyController.targetRootRpId) {
-                  return _videoReplyController.colorAnimWrapper(
+                if (item.id == controller.targetRootRpId) {
+                  return controller.colorAnimWrapper(
                     colorScheme,
                     child,
                   );
@@ -247,11 +236,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           );
         }
 
-        final child = HttpError(
-          errMsg: '还没有评论',
-          onReload: _videoReplyController.onReload,
-        );
-        if (_videoReplyController.voteCard case final voteCard?) {
+        final child = emptyWidget();
+        if (controller.voteCard case final voteCard?) {
           return SliverMainAxisGroup(
             slivers: [
               SliverToBoxAdapter(
@@ -265,7 +251,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
       case Error(:final errMsg):
         return HttpError(
           errMsg: errMsg,
-          onReload: _videoReplyController.onReload,
+          onReload: controller.onReload,
         );
     }
   }
