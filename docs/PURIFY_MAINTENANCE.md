@@ -4,7 +4,7 @@
 
 - `main`：保留个人 fork 的上游跟踪分支。
 - `feat/danmaku-filter-assistant`：原 PR #3222 的提交分支，继续用于与上游沟通。
-- `purify`：净化增强版的长期发行分支，包含评论净化和弹幕屏蔽增强。
+- `purify`：净化增强版的长期发行分支，包含评论、弹幕和视频屏蔽增强。
 - `upstream/main`：原项目 `bggRGjQaUbCoE/PiliPlus` 的主分支。
 
 发行标签统一使用 `purify-vX.Y.Z`，避免与上游版本号混淆。
@@ -29,13 +29,14 @@ flutter test
 5. 本仓库的应用 ID、更新地址和发行文件名。
 6. 评论区顶部屏蔽中心、昵称旁快捷操作、评论关键词及标记库。
 7. `ReplyAiDetector` 的本地评分规则、`ReplyAiMentionTracker` 的会话内重复 @ 统计、评论折叠卡片和 AI 检测信任列表。
+8. `RecommendFilter` 的视频标题关键词配置、净化中心入口和 `purify.json` 中的 `videoPurify` 数据。
 
 ## 首次发行
 
 1. 在 `purify` 分支完成 `flutter analyze` 与 `flutter test`。
-2. 在 GitHub Actions 手动运行 `Build`，至少启用 Android，并把 `tag` 设为 `purify-v0.1.0`。
+2. 在 GitHub Actions 手动运行 `Build`，至少启用 Android，并把 `tag` 设为 `purify-v1.0.0`。
 3. 检查三个 Android ABI 安装包均已附加到 Release。
-4. 在真实设备确认净化版可与上游版共存、登录正常、评论账号屏蔽可撤销、弹幕规则可保存。
+4. 在真实设备确认净化版可与上游版共存、登录正常、评论账号屏蔽可撤销、弹幕规则可保存、视频关键词可即时生效。
 5. 发布说明中保留上游项目链接、GPL-3.0 许可和“非官方社区分支”声明。
 
 ## 产品边界

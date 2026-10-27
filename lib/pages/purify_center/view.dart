@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -32,6 +33,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     ].where((enabled) => enabled).length;
     final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
     final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;
+    final videoPurify = RecommendFilter.videoPurifyConfig;
     final padding = MediaQuery.viewPaddingOf(context);
 
     return SimpleScaffold(
@@ -54,7 +56,9 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
                 children: [
                   Text('净化增强版', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
-                  const Text('把评论与弹幕降噪规则集中在一处。所有匹配均在本机完成，不上传评论、弹幕或屏蔽列表。'),
+                  const Text(
+                    '把评论、弹幕与视频降噪规则集中在一处。所有匹配均在本机完成，不上传内容或屏蔽列表。',
+                  ),
                 ],
               ),
             ),
@@ -80,6 +84,18 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
                   leading: const Icon(Icons.subtitles_off_outlined),
                   title: const Text('弹幕屏蔽助手'),
                   subtitle: Text('$ruleCount 条文字规则，已启用 $formatCount 项格式识别'),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  onTap: () => _open('/videoPurify'),
+                  leading: const Icon(Icons.video_library_outlined),
+                  title: const Text('视频关键词屏蔽'),
+                  subtitle: Text(
+                    videoPurify.enabled
+                        ? '已启用标题关键词过滤${videoPurify.applyToRelatedVideos ? '，包含相关视频' : ''}'
+                        : '未启用；按标题过滤推荐、热门与排行视频',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                 ),
               ],

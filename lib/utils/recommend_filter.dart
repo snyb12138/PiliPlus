@@ -1,4 +1,7 @@
 import 'package:PiliPlus/models/model_video.dart';
+import 'package:PiliPlus/models/user/video_purify.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 
 abstract final class RecommendFilter {
@@ -12,6 +15,36 @@ abstract final class RecommendFilter {
     caseSensitive: false,
   );
   static bool enableFilter = rcmdRegExp.pattern.isNotEmpty;
+
+  static VideoPurifyConfig get videoPurifyConfig => VideoPurifyConfig(
+    keywordPattern: rcmdRegExp.pattern,
+    applyToRelatedVideos: applyFilterToRelatedVideos,
+    exemptFollowedUploaders: exemptFilterForFollowed,
+  );
+
+  static Future<void> applyVideoPurifyConfig(
+    VideoPurifyConfig config,
+  ) async {
+    final regexp = RegExp(config.keywordPattern, caseSensitive: false);
+    rcmdRegExp = regexp;
+    enableFilter = regexp.pattern.isNotEmpty;
+    applyFilterToRelatedVideos = config.applyToRelatedVideos;
+    exemptFilterForFollowed = config.exemptFollowedUploaders;
+    await Future.wait([
+      GStorage.setting.put(
+        SettingBoxKey.banWordForRecommend,
+        config.keywordPattern,
+      ),
+      GStorage.setting.put(
+        SettingBoxKey.applyFilterToRelatedVideos,
+        config.applyToRelatedVideos,
+      ),
+      GStorage.setting.put(
+        SettingBoxKey.exemptFilterForFollowed,
+        config.exemptFollowedUploaders,
+      ),
+    ]);
+  }
 
   // (web/app)rcmd
   static bool filterWithExempt(BaseVideoItemModel videoItem) {

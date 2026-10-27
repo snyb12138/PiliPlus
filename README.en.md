@@ -13,7 +13,7 @@
 </div>
 
 <div align="center">
-    <p>A PiliPlus community fork focused on local comment and danmaku filtering</p>
+    <p>A PiliPlus community fork focused on local comment, danmaku, and video filtering</p>
 
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="PiliPlus mobile screenshot" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="PiliPlus mobile screenshot" />
@@ -27,7 +27,7 @@
 
 ## Purify edition
 
-This GPL-3.0 community fork is based on [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus). It adds a local-only comment account mute list, quick comment actions, import/export, and the danmaku filter assistant from PR #3222. New filters are opt-in, explainable, and reversible; no comments, danmaku, or block lists are uploaded.
+This GPL-3.0 community fork is based on [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus). It adds a local-only comment account mute list, quick comment actions, title-keyword video filtering, import/export, and the danmaku filter assistant from PR #3222. New filters are opt-in, explainable, and reversible; no comments, danmaku, video titles, or block lists are uploaded.
 
 ## Download
 

@@ -10,6 +10,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
+import 'package:PiliPlus/models/user/video_purify.dart';
 import 'package:PiliPlus/pages/my_reply/view.dart';
 import 'package:PiliPlus/pages/search/controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -17,6 +18,7 @@ import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/font_utils.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/parse_int.dart';
+import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -210,9 +212,10 @@ abstract final class ConfigArchive {
   static String _exportBlacklist() => jsonEncode(Pref.blackMids.toList());
 
   static String _exportPurify() => jsonEncode({
-    'version': 1,
+    'version': 2,
     'danmakuAssistant': Pref.danmakuAssistantConfig.toStorage(),
     'replyPurify': ReplyGrpc.replyPurifyConfig.toStorage(),
+    'videoPurify': RecommendFilter.videoPurifyConfig.toStorage(),
   });
 
   static String? _exportReply() {
@@ -279,6 +282,11 @@ abstract final class ConfigArchive {
     if (data['replyPurify'] case final Map reply) {
       await ReplyGrpc.replaceReplyPurifyConfig(
         ReplyPurifyConfig.fromStorage(reply),
+      );
+    }
+    if (data['videoPurify'] case final Map video) {
+      await RecommendFilter.applyVideoPurifyConfig(
+        VideoPurifyConfig.fromStorage(video),
       );
     }
   }

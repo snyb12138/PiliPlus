@@ -13,7 +13,7 @@
 ![GitHub repo size](https://img.shields.io/github/repo-size/snyb12138/PiliPlus)
 ![GitHub all releases](https://img.shields.io/github/downloads/snyb12138/PiliPlus/total)
 </div>
-    <p>专注评论与弹幕降噪的 PiliPlus 社区分支</p>
+    <p>专注评论、弹幕与视频降噪的 PiliPlus 社区分支</p>
     
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="home" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="home" />
@@ -28,12 +28,13 @@
 
 ## 净化增强版
 
-本分支基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)（GPL-3.0）维护，目标是在尽量跟随上游更新的同时，提供透明、可撤销、仅在本机执行的评论与弹幕过滤能力。
+本分支基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)（GPL-3.0）维护，目标是在尽量跟随上游更新的同时，提供透明、可撤销、仅在本机执行的评论、弹幕与视频过滤能力。
 
 - 评论净化助手：长按评论即可仅屏蔽该账号的评论，不影响其视频、动态，也不写入哔哩哔哩账号黑名单；支持管理、撤销和导入导出。
 - 疑似 AI 评论折叠：可选的本地多特征评分，提供“谨慎/均衡”两档；命中后显示原因并允许查看原文、信任账号，不会直接删除内容。
 - 弹幕屏蔽助手：绝对/温和文字规则、日期打卡、时间打卡、人数刷屏和短打卡识别，并可在播放器中查看命中预览。
-- 隐私原则：不上传评论、弹幕或本地屏蔽列表，不调用云端模型判断内容。
+- 视频关键词屏蔽：按标题过滤推荐、热门、排行和可选的相关视频，支持正则、已关注 UP 主豁免与导入导出。
+- 隐私原则：不上传评论、弹幕、视频标题或本地屏蔽列表，不调用云端模型判断内容。
 - 发行隔离：Android 使用独立应用 ID，可与上游 PiliPlus 同时安装；更新仅检查本仓库的 Releases。
 
 开发分支为 `purify`，发行标签使用 `purify-vX.Y.Z`。同步上游的方法见 [净化版维护说明](docs/PURIFY_MAINTENANCE.md)。

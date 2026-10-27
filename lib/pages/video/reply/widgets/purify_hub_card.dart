@@ -1,6 +1,7 @@
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
+import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -80,6 +81,7 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
     final danmakuCount =
         danmaku.absoluteRules.length + danmaku.gentleRules.length;
     final keywordEnabled = ReplyGrpc.replyRegExp.pattern.isNotEmpty;
+    final videoKeywordEnabled = RecommendFilter.enableFilter;
     final summary =
         '${config.mutedUsers.length} 个屏蔽账号 · '
         '${config.markedUsers.length} 个标记 · '
@@ -161,6 +163,13 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
                   onPressed: _editKeywords,
                   icon: const Icon(Icons.key_outlined, size: 18),
                   label: Text(keywordEnabled ? '编辑关键词' : '添加关键词'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _open('/videoPurify'),
+                  icon: const Icon(Icons.video_library_outlined, size: 18),
+                  label: Text(
+                    videoKeywordEnabled ? '视频关键词·已启用' : '视频关键词',
+                  ),
                 ),
                 if (config.aiFilterLevel != ReplyAiFilterLevel.off)
                   Chip(
