@@ -86,7 +86,14 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y --no-install-recommends libgtk-3-dev libx11-dev libxi-dev
-                  flutter analyze lib/utils/storage_pref.dart lib/models/user/reply_density_detector.dart test/models/user/reply_density_detector_test.dart --no-pub
+                  flutter analyze \
+                    lib/utils/storage_pref.dart \
+                    lib/grpc/reply.dart \
+                    lib/models/user/reply_density_detector.dart \
+                    lib/pages/setting/models/reply_settings.dart \
+                    lib/pages/video/reply/widgets/reply_item_grpc.dart \
+                    test/models/user/reply_density_detector_test.dart \
+                    --no-pub
                   flutter test test/utils/storage_pref_test.dart test/models/user/reply_density_detector_test.dart --no-pub
 
             - name: Write key

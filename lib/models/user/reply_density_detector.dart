@@ -57,6 +57,7 @@ class ReplyDensityAssessment {
 abstract final class ReplyDensityDetector {
   static ReplyDensityAssessment assess({
     required String message,
+    String? aiMessage,
     required Map<String, int> atNameToMid,
     Iterable<String> structuredEmotes = const [],
     bool hasPictures = false,
@@ -117,7 +118,7 @@ abstract final class ReplyDensityDetector {
         candidateType == ReplyDensityCandidateType.singlePureMention ||
         candidateType == ReplyDensityCandidateType.multiplePureMentions;
     final aiAssessment = ReplyAiDetector.assess(
-      message,
+      aiMessage ?? message,
       nickname: nickname,
       repeatedMentionCount: repeatedMentionCount,
     );

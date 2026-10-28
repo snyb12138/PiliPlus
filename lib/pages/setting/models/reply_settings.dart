@@ -67,13 +67,14 @@ List<SettingsModel> get replySettings => [
     onChanged: (value) => ReplyGrpc.antiGoodsReply = value,
   ),
   const NormalModel(
-    title: '屏蔽评论@数量',
+    title: '按不同 @ 账号数屏蔽评论',
     getSubtitle: _replyAtBlockSubtitle,
     leading: Icon(Icons.pin_outlined),
     onTap: _showReplyAtBlockDialog,
   ),
   const SwitchModel(
-    title: '屏蔽只包含@的评论',
+    title: '折叠只包含真实 @ 的评论',
+    subtitle: '可在评论区恢复查看，不会自动加入黑名单',
     leading: Icon(Icons.alternate_email),
     setKey: SettingBoxKey.blockAtOnlyReply,
     onChanged: _onBlockAtOnlyReplyChanged,
@@ -165,7 +166,7 @@ String _replyAtBlockSubtitle() {
   if (blockReplyAtCount == null) {
     return '禁用';
   }
-  return '屏蔽$blockReplyAtCount个@及以上的评论';
+  return '涉及 $blockReplyAtCount 个不同账号及以上时屏蔽';
 }
 
 Future<void> _showReplyAtBlockDialog(
@@ -184,13 +185,16 @@ Future<void> _showReplyAtBlockDialog(
   await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('屏蔽@的数量'),
+      title: const Text('屏蔽不同 @ 账号数量'),
       content: TextFormField(
         autofocus: true,
         keyboardType: .number,
         initialValue: countStr,
         onChanged: (value) => countStr = value,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: const InputDecoration(
+          helperText: '按评论涉及的不同账号数计算，不是正文中的 @ 出现次数',
+        ),
       ),
       actions: [
         TextButton(onPressed: onChanged, child: const Text('禁用')),

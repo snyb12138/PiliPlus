@@ -21,7 +21,7 @@ import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/http/video.dart';
-import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/vote.dart';
 import 'package:PiliPlus/pages/member/widget/medal_widget.dart';
 import 'package:PiliPlus/pages/save_panel/view.dart';
@@ -62,8 +62,8 @@ import 'package:protobuf/protobuf.dart';
 
 part 'package:PiliPlus/common/widgets/context_menu/reply_menu_helper.dart';
 
-class _AiReplyFold extends StatefulWidget {
-  const _AiReplyFold({
+class _ReplyPurifyFold extends StatefulWidget {
+  const _ReplyPurifyFold({
     super.key,
     required this.reply,
     required this.assessment,
@@ -72,18 +72,18 @@ class _AiReplyFold extends StatefulWidget {
   });
 
   final ReplyInfo reply;
-  final ReplyAiAssessment assessment;
+  final ReplyDensityAssessment assessment;
   final Widget child;
   final bool compact;
 
   @override
-  State<_AiReplyFold> createState() => _AiReplyFoldState();
+  State<_ReplyPurifyFold> createState() => _ReplyPurifyFoldState();
 }
 
-class _AiReplyFoldState extends State<_AiReplyFold> {
+class _ReplyPurifyFoldState extends State<_ReplyPurifyFold> {
   var _revealed = false;
 
-  Future<void> _trustUser() async {
+  Future<void> _trustAiUser() async {
     await ReplyGrpc.trustAiReplyUser(
       widget.reply.mid.toInt(),
       name: widget.reply.member.name,
@@ -93,15 +93,38 @@ class _AiReplyFoldState extends State<_AiReplyFold> {
     SmartDialog.showToast('已信任该账号，其评论不再参与 AI 检测');
   }
 
+  String _densitySummary(ReplyDensityAssessment assessment) {
+    return switch (assessment.candidateType) {
+      ReplyDensityCandidateType.singlePureMention => '仅包含 1 次真实 @',
+      ReplyDensityCandidateType.multiplePureMentions =>
+        '仅包含 ${assessment.mentionOccurrenceCount} 次真实 @'
+            '（${assessment.distinctMentionMidCount} 个不同账号）',
+      _ => '',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_revealed ||
-        !ReplyGrpc.shouldFoldAiReply(widget.reply, widget.assessment)) {
+    final foldDensity = ReplyGrpc.shouldFoldDensityReply(
+      widget.reply,
+      widget.assessment,
+    );
+    final foldAi = ReplyGrpc.shouldFoldAiReply(
+      widget.reply,
+      widget.assessment.aiAssessment,
+    );
+    if (_revealed || (!foldDensity && !foldAi)) {
       return widget.child;
     }
 
+    final reasons = <String>[
+      if (foldDensity) _densitySummary(widget.assessment),
+      if (foldAi && widget.assessment.aiAssessment.summary.isNotEmpty)
+        widget.assessment.aiAssessment.summary,
+      if (foldAi && widget.assessment.aiAssessment.summary.isEmpty)
+        '疑似 AI 评论',
+    ];
     final colorScheme = ColorScheme.of(context);
-    final summary = widget.assessment.summary;
     final child = Material(
       type: MaterialType.transparency,
       child: Padding(
@@ -112,16 +135,16 @@ class _AiReplyFoldState extends State<_AiReplyFold> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
-              Icons.auto_awesome_outlined,
+              foldAi
+                  ? Icons.auto_awesome_outlined
+                  : Icons.alternate_email,
               size: widget.compact ? 16 : 20,
               color: colorScheme.secondary,
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                summary.isEmpty
-                    ? '已折叠 @${widget.reply.member.name} 的疑似 AI 评论'
-                    : '已折叠 @${widget.reply.member.name}：$summary',
+                '已折叠 @${widget.reply.member.name}：${reasons.join(' · ')}',
                 maxLines: widget.compact ? 2 : 3,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -134,8 +157,11 @@ class _AiReplyFoldState extends State<_AiReplyFold> {
               onPressed: () => setState(() => _revealed = true),
               child: const Text('查看'),
             ),
-            if (!widget.compact)
-              TextButton(onPressed: _trustUser, child: const Text('信任')),
+            if (foldAi && !widget.compact)
+              TextButton(
+                onPressed: _trustAiUser,
+                child: const Text('信任 AI'),
+              ),
           ],
         ),
       ),
@@ -324,10 +350,17 @@ class ReplyItemGrpc extends StatelessWidget {
       );
     }
 
-    final assessment = ReplyGrpc.assessAiReply(replyItem);
-    if (replyItem.mid != upMid &&
-        ReplyGrpc.shouldFoldAiReply(replyItem, assessment)) {
-      return _AiReplyFold(
+    final assessment = ReplyGrpc.assessReplyDensity(replyItem);
+    final foldDensity = ReplyGrpc.shouldFoldDensityReply(
+      replyItem,
+      assessment,
+    );
+    final foldAi = ReplyGrpc.shouldFoldAiReply(
+      replyItem,
+      assessment.aiAssessment,
+    );
+    if (replyItem.mid != upMid && (foldDensity || foldAi)) {
+      return _ReplyPurifyFold(
         key: ValueKey(replyItem.id),
         reply: replyItem,
         assessment: assessment,
@@ -865,10 +898,17 @@ class ReplyItemGrpc extends StatelessWidget {
                     ),
                   ),
                 );
-                final assessment = ReplyGrpc.assessAiReply(childReply);
-                if (childReply.mid != upMid &&
-                    ReplyGrpc.shouldFoldAiReply(childReply, assessment)) {
-                  return _AiReplyFold(
+                final assessment = ReplyGrpc.assessReplyDensity(childReply);
+                final foldDensity = ReplyGrpc.shouldFoldDensityReply(
+                  childReply,
+                  assessment,
+                );
+                final foldAi = ReplyGrpc.shouldFoldAiReply(
+                  childReply,
+                  assessment.aiAssessment,
+                );
+                if (childReply.mid != upMid && (foldDensity || foldAi)) {
+                  return _ReplyPurifyFold(
                     key: ValueKey(childReply.id),
                     reply: childReply,
                     assessment: assessment,
