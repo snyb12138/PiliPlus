@@ -101,4 +101,26 @@ void main() {
       });
     }
   });
+
+  test('density text can exclude a nested prefix without hiding AI evidence', () {
+    final result = ReplyDensityDetector.assess(
+      message: '@目标账号',
+      aiMessage: '回复 @上层账号 : 作为一个 AI 语言模型，我无法判断。',
+      atNameToMid: const {'目标账号': 1001, '上层账号': 1002},
+      config: const ReplyDensityConfig(foldPureMentions: true),
+    );
+
+    expect(
+      result.candidateType,
+      ReplyDensityCandidateType.singlePureMention,
+    );
+    expect(result.mentionOccurrenceCount, 1);
+    expect(result.distinctMentionMidCount, 1);
+    expect(result.shouldFold, isTrue);
+    expect(
+      result.aiAssessment.signals,
+      contains(ReplyAiSignal.modelDisclosure),
+    );
+  });
+
 }
