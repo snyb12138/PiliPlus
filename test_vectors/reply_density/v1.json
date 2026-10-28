@@ -501,7 +501,7 @@
         "candidateType": "none",
         "mentionOccurrenceCount": 0,
         "distinctMentionMidCount": 0,
-        "effectiveTextLength": 48,
+        "effectiveTextLength": 43,
         "shouldFold": false,
         "pendingReview": false,
         "shouldPermanentlyBlock": false,
