@@ -143,22 +143,31 @@ abstract final class Pref {
           (item) => Pair<SegmentType, SkipType>(
             first: item,
             second: item.index < list.length
-                ? .values[list[item.index]]
+                ? _parseSkipType(list[item.index])
                 : .skipOnce,
           ),
         )
         .toList();
   }
 
+  static SkipType _parseSkipType(Object? value) =>
+      value is int && value >= 0 && value < SkipType.values.length
+          ? SkipType.values[value]
+          : SkipType.skipOnce;
+
+  static final _hexColorPattern = RegExp(r'^[0-9a-fA-F]{6}$');
+
   static List<Color> get blockColor {
     final list = _setting.get(SettingBoxKey.blockColor) as List?;
-    if (list == null || list.length != SegmentType.values.length) {
+    if (list == null || list.length > SegmentType.values.length) {
       return SegmentType.values.map((i) => i.color).toList();
     }
     return SegmentType.values.map((item) {
-      final String e = list[item.index];
-      final color = e.isNotEmpty ? int.tryParse('FF$e', radix: 16) : null;
-      return color != null ? Color(color) : item.color;
+      final value = item.index < list.length ? list[item.index] : null;
+      if (value is! String || !_hexColorPattern.hasMatch(value)) {
+        return item.color;
+      }
+      return Color(int.parse('FF$value', radix: 16));
     }).toList();
   }
 
