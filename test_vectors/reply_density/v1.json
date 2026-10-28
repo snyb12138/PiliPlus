@@ -551,6 +551,52 @@
           "modelDisclosure"
         ]
       }
+    },
+    {
+      "caseId": "many_distinct_verified_mentions",
+      "description": "A long reply made only of many verified mentions remains a recoverable fold candidate.",
+      "coverage": [
+        "multiplePureMentions",
+        "dualMentionMetrics",
+        "screenshotRegression"
+      ],
+      "input": {
+        "message": "@账号一 @账号二 @账号三 @账号四\n@账号五 @账号六 @账号七 @账号八 @账号九",
+        "atNameToMid": {
+          "账号一": 101,
+          "账号二": 102,
+          "账号三": 103,
+          "账号四": 104,
+          "账号五": 105,
+          "账号六": 106,
+          "账号七": 107,
+          "账号八": 108,
+          "账号九": 109
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": true,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "multiplePureMentions",
+        "mentionOccurrenceCount": 9,
+        "distinctMentionMidCount": 9,
+        "effectiveTextLength": 0,
+        "shouldFold": true,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "multiplePureMentions"
+        ]
+      }
     }
   ]
 }
