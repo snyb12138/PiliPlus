@@ -194,10 +194,23 @@ abstract final class ReplyDensityDetector {
 
   static bool _isMentionBoundary(String message, int index) {
     if (index >= message.length) return true;
-    final rune = message.runeAt(index);
+    final rune = _runeAt(message, index);
     return rune == 0x40 ||
         _isWhitespaceOrPunctuationRune(rune) ||
         _isEmojiRune(rune);
+  }
+
+  static int _runeAt(String value, int index) {
+    final first = value.codeUnitAt(index);
+    if (first >= 0xD800 && first <= 0xDBFF && index + 1 < value.length) {
+      final second = value.codeUnitAt(index + 1);
+      if (second >= 0xDC00 && second <= 0xDFFF) {
+        return 0x10000 +
+            ((first - 0xD800) << 10) +
+            (second - 0xDC00);
+      }
+    }
+    return first;
   }
 
   static bool _isWhitespaceOrPunctuationCluster(String cluster) {
