@@ -70,12 +70,14 @@ class _ReplyPurifyFold extends StatefulWidget {
     required this.assessment,
     required this.child,
     this.compact = false,
+    this.onIgnoreForVideo,
   });
 
   final ReplyInfo reply;
   final ReplyDensityAssessment assessment;
   final Widget child;
   final bool compact;
+  final ValueChanged<ReplyInfo>? onIgnoreForVideo;
 
   @override
   State<_ReplyPurifyFold> createState() => _ReplyPurifyFoldState();
@@ -158,6 +160,20 @@ class _ReplyPurifyFoldState extends State<_ReplyPurifyFold> {
               onPressed: () => setState(() => _revealed = true),
               child: const Text('查看'),
             ),
+            if (widget.onIgnoreForVideo != null)
+              if (widget.compact)
+                IconButton(
+                  tooltip: '本视频忽略',
+                  onPressed: () =>
+                      widget.onIgnoreForVideo!(widget.reply),
+                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                )
+              else
+                TextButton(
+                  onPressed: () =>
+                      widget.onIgnoreForVideo!(widget.reply),
+                  child: const Text('本视频忽略'),
+                ),
             if (foldAi && !widget.compact)
               TextButton(
                 onPressed: _trustAiUser,
@@ -280,6 +296,8 @@ class ReplyItemGrpc extends StatelessWidget {
     this.onCheckReply,
     this.onToggleTop,
     this.jumpToDialogue,
+    this.purifySession,
+    this.onPurifySessionChanged,
   });
   final ReplyInfo replyItem;
   final int replyLevel;
@@ -294,6 +312,14 @@ class ReplyItemGrpc extends StatelessWidget {
   final ValueChanged<ReplyInfo>? onCheckReply;
   final ValueChanged<ReplyInfo>? onToggleTop;
   final VoidCallback? jumpToDialogue;
+  final ReplyPurifyVideoSession? purifySession;
+  final VoidCallback? onPurifySessionChanged;
+
+  void _ignorePurifyReply(ReplyInfo reply) {
+    if (purifySession?.ignore(reply.id.toInt()) ?? false) {
+      onPurifySessionChanged?.call();
+    }
+  }
 
   static final _voteRegExp = RegExp(r"^\{vote:\d+?\}$");
   static final _timeRegExp = RegExp(r'^(?:\d+[:：])?\d+[:：]\d+$');
@@ -360,11 +386,17 @@ class ReplyItemGrpc extends StatelessWidget {
       replyItem,
       assessment.aiAssessment,
     );
-    if (replyItem.mid != upMid && (foldDensity || foldAi)) {
+    final ignoredForVideo =
+        purifySession?.isIgnored(replyItem.id.toInt()) ?? false;
+    if (!ignoredForVideo &&
+        replyItem.mid != upMid &&
+        (foldDensity || foldAi)) {
       return _ReplyPurifyFold(
         key: ValueKey(replyItem.id),
         reply: replyItem,
         assessment: assessment,
+        onIgnoreForVideo:
+            onPurifySessionChanged == null ? null : _ignorePurifyReply,
         child: buildReply(),
       );
     }
@@ -908,12 +940,19 @@ class ReplyItemGrpc extends StatelessWidget {
                   childReply,
                   assessment.aiAssessment,
                 );
-                if (childReply.mid != upMid && (foldDensity || foldAi)) {
+                final ignoredForVideo =
+                    purifySession?.isIgnored(childReply.id.toInt()) ?? false;
+                if (!ignoredForVideo &&
+                    childReply.mid != upMid &&
+                    (foldDensity || foldAi)) {
                   return _ReplyPurifyFold(
                     key: ValueKey(childReply.id),
                     reply: childReply,
                     assessment: assessment,
                     compact: true,
+                    onIgnoreForVideo: onPurifySessionChanged == null
+                        ? null
+                        : _ignorePurifyReply,
                     child: child,
                   );
                 }
