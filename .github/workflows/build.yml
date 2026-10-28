@@ -91,6 +91,8 @@ jobs:
                     lib/grpc/reply.dart \
                     lib/models/user/reply_density_detector.dart \
                     lib/pages/setting/models/reply_settings.dart \
+                    lib/pages/video/reply/view.dart \
+                    lib/pages/video/reply/widgets/purify_hub_card.dart \
                     lib/pages/video/reply/widgets/reply_item_grpc.dart \
                     test/models/user/reply_density_detector_test.dart \
                     --no-pub
