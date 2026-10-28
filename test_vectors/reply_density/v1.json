@@ -91,7 +91,7 @@
         "dualMentionMetrics"
       ],
       "input": {
-        "message": "@主账号 @主账号\\n@主账号",
+        "message": "@主账号 @主账号\n@主账号",
         "atNameToMid": {
           "主账号": 1001
         },
