@@ -82,12 +82,12 @@ jobs:
               shell: pwsh
               run: lib/scripts/patch.ps1 android
 
-            - name: Validate SponsorBlock setting recovery
+            - name: Validate Purify settings and reply density contract
               run: |
                   sudo apt-get update
                   sudo apt-get install -y --no-install-recommends libgtk-3-dev libx11-dev libxi-dev
-                  flutter analyze lib/utils/storage_pref.dart --no-pub
-                  flutter test test/utils/storage_pref_test.dart --no-pub
+                  flutter analyze lib/utils/storage_pref.dart lib/models/user/reply_density_detector.dart test/models/user/reply_density_detector_test.dart --no-pub
+                  flutter test test/utils/storage_pref_test.dart test/models/user/reply_density_detector_test.dart --no-pub
 
             - name: Write key
               if: github.event_name == 'workflow_dispatch'
