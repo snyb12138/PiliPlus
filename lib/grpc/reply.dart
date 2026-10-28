@@ -5,6 +5,7 @@ import 'package:PiliPlus/grpc/grpc_req.dart';
 import 'package:PiliPlus/grpc/url.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/global_data.dart';
@@ -92,19 +93,29 @@ abstract final class ReplyGrpc {
   static Map<int, int> mentionSummaryForUser(int mid) =>
       _aiMentionTracker.mentionCountsForAuthor(mid);
 
-  static ReplyAiAssessment assessAiReply(ReplyInfo reply) {
-    final mentionedMids = reply.content.atNameToMid.values.map(
+  static ReplyDensityAssessment assessReplyDensity(ReplyInfo reply) {
+    final content = reply.content;
+    final mentionedMids = content.atNameToMid.values.map(
       (mid) => mid.toInt(),
     );
-    return ReplyAiDetector.assess(
-      reply.content.message,
+    return ReplyDensityDetector.assess(
+      message: content.message,
+      atNameToMid: content.atNameToMid.map(
+        (name, mid) => MapEntry(name, mid.toInt()),
+      ),
+      structuredEmotes: content.emotes.keys,
+      hasPictures: content.pictures.isNotEmpty,
       nickname: reply.member.name,
       repeatedMentionCount: _aiMentionTracker.repeatedMentionCount(
         authorMid: reply.mid.toInt(),
         mentionedMids: mentionedMids,
       ),
+      config: ReplyDensityConfig(foldPureMentions: blockAtOnlyReply),
     );
   }
+
+  static ReplyAiAssessment assessAiReply(ReplyInfo reply) =>
+      assessReplyDensity(reply).aiAssessment;
 
   static void _observeAiReply(ReplyInfo reply) {
     _aiMentionTracker.observe(
@@ -136,6 +147,14 @@ abstract final class ReplyGrpc {
         (assessment ?? assessAiReply(reply)).matches(config.aiFilterLevel);
   }
 
+  static bool shouldFoldDensityReply(
+    ReplyInfo reply, [
+    ReplyDensityAssessment? assessment,
+  ]) {
+    return reply.mid.toInt() != Accounts.main.mid &&
+        (assessment ?? assessReplyDensity(reply)).shouldFold;
+  }
+
   // static Future replyInfo({required int rpid}) {
   //   return _request(
   //     GrpcUrl.replyInfo,
@@ -159,56 +178,6 @@ abstract final class ReplyGrpc {
         reply.content.message.contains(Constants.goodsUrlPrefix);
   }
 
-  static bool _blockAtOnlyReply(ReplyInfo reply) {
-    if (!blockAtOnlyReply) return false;
-
-    final content = reply.content;
-    final atNameToMid = content.atNameToMid;
-    if (atNameToMid.isEmpty) return false;
-    if (content.emotes.isNotEmpty || content.pictures.isNotEmpty) return false;
-
-    final message = content.message;
-    final length = message.length;
-
-    int i = 0;
-
-    if (reply.root != reply.parent) {
-      i = message.indexOf(':') + 1;
-      if (i <= 0) return false;
-    }
-
-    var hasAt = false;
-    while (i < length) {
-      var c = message.codeUnitAt(i);
-
-      if (c case 0x20 /* ` ` */ || 0x0A /* `\n` */ ) {
-        i++;
-        continue;
-      }
-
-      if (c != 0x40 /* `@` */ ) return false;
-
-      i++;
-      final nameStart = i;
-
-      while (i < length) {
-        c = message.codeUnitAt(i);
-        if (c case 0x20 || 0x40 || 0x0A) {
-          break;
-        }
-        i++;
-      }
-
-      if (i == nameStart) return false;
-      final name = message.substring(nameStart, i);
-      if (!atNameToMid.containsKey(name)) return false;
-
-      hasAt = true;
-    }
-
-    return hasAt;
-  }
-
   static bool _blockReplyAtCount(ReplyInfo reply) {
     return blockReplyAtCount != null &&
         reply.content.atNameToMid.length >= blockReplyAtCount!;
@@ -219,7 +188,6 @@ abstract final class ReplyGrpc {
     return replyPurifyConfig.contains(mid) ||
         GlobalData().blackMids.contains(mid) ||
         _blockReplyAtCount(reply) ||
-        _blockAtOnlyReply(reply) ||
         (antiGoodsReply && _needRemoveGoodGrpc(reply)) ||
         (enableFilter && replyRegExp.hasMatch(reply.content.message));
   }
