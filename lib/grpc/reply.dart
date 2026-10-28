@@ -93,13 +93,21 @@ abstract final class ReplyGrpc {
   static Map<int, int> mentionSummaryForUser(int mid) =>
       _aiMentionTracker.mentionCountsForAuthor(mid);
 
+  static String _replyDensityMessage(ReplyInfo reply) {
+    final message = reply.content.message;
+    if (reply.root == reply.parent) return message;
+    final separator = message.indexOf(':');
+    return separator < 0 ? message : message.substring(separator + 1);
+  }
+
   static ReplyDensityAssessment assessReplyDensity(ReplyInfo reply) {
     final content = reply.content;
     final mentionedMids = content.atNameToMid.values.map(
       (mid) => mid.toInt(),
     );
     return ReplyDensityDetector.assess(
-      message: content.message,
+      message: _replyDensityMessage(reply),
+      aiMessage: content.message,
       atNameToMid: content.atNameToMid.map(
         (name, mid) => MapEntry(name, mid.toInt()),
       ),
