@@ -48,7 +48,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   late ColorScheme colorScheme;
   @override
   late VideoReplyController controller;
-  late final ReplyPurifyVideoSession _purifySession;
+  late ReplyPurifyVideoSession _purifySession;
 
   String get heroTag => widget.heroTag;
 
@@ -86,6 +86,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    if (_purifySession.videoId != controller.oid) {
+      _purifySession = ReplyPurifyVideoSession(videoId: controller.oid);
+    }
     final purifyMode = ReplyGrpc.replyPurifyConfig.centerMode;
     return fabAnimWrapper(
       child: refreshIndicator(
