@@ -1,0 +1,556 @@
+{
+  "schemaVersion": 1,
+  "candidateTypes": [
+    "none",
+    "singlePureMention",
+    "multiplePureMentions",
+    "shortText",
+    "pureEmote",
+    "pureImage"
+  ],
+  "cases": [
+    {
+      "caseId": "single_real_mention_fold_disabled",
+      "description": "A verified single pure mention is detected but not folded when the switch is off.",
+      "coverage": [
+        "singlePureMention",
+        "realMentionValidation"
+      ],
+      "input": {
+        "message": "@主账号",
+        "atNameToMid": {
+          "主账号": 1001
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "singlePureMention",
+        "mentionOccurrenceCount": 1,
+        "distinctMentionMidCount": 1,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "singlePureMention"
+        ]
+      }
+    },
+    {
+      "caseId": "single_real_mention_fold_enabled",
+      "description": "The same verified mention is recoverably folded only after opt-in.",
+      "coverage": [
+        "singlePureMention",
+        "foldSwitch"
+      ],
+      "input": {
+        "message": "  @主账号！ ",
+        "atNameToMid": {
+          "主账号": 1001
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": true,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "singlePureMention",
+        "mentionOccurrenceCount": 1,
+        "distinctMentionMidCount": 1,
+        "effectiveTextLength": 0,
+        "shouldFold": true,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "singlePureMention"
+        ]
+      }
+    },
+    {
+      "caseId": "same_account_mentioned_three_times",
+      "description": "Occurrence count grows while the distinct account count stays at one.",
+      "coverage": [
+        "multiplePureMentions",
+        "dualMentionMetrics"
+      ],
+      "input": {
+        "message": "@主账号 @主账号\n@主账号",
+        "atNameToMid": {
+          "主账号": 1001
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": true,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "multiplePureMentions",
+        "mentionOccurrenceCount": 3,
+        "distinctMentionMidCount": 1,
+        "effectiveTextLength": 0,
+        "shouldFold": true,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "multiplePureMentions"
+        ]
+      }
+    },
+    {
+      "caseId": "two_distinct_accounts",
+      "description": "Two verified accounts increment both occurrence and distinct metrics.",
+      "coverage": [
+        "multiplePureMentions",
+        "dualMentionMetrics"
+      ],
+      "input": {
+        "message": "@甲 @乙",
+        "atNameToMid": {
+          "甲": 11,
+          "乙": 22
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "multiplePureMentions",
+        "mentionOccurrenceCount": 2,
+        "distinctMentionMidCount": 2,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "multiplePureMentions"
+        ]
+      }
+    },
+    {
+      "caseId": "unverified_at_text_is_not_a_mention",
+      "description": "An at-like token absent from atNameToMid is ordinary short text.",
+      "coverage": [
+        "realMentionValidation",
+        "shortText"
+      ],
+      "input": {
+        "message": "@主账号",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": true,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "shortText",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 3,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "shortText"
+        ]
+      }
+    },
+    {
+      "caseId": "short_text_after_verified_mention",
+      "description": "A verified mention is removed before effective text length is counted.",
+      "coverage": [
+        "shortText",
+        "realMentionValidation",
+        "effectiveLength"
+      ],
+      "input": {
+        "message": "@主账号 好耶！",
+        "atNameToMid": {
+          "主账号": 1001
+        },
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": true,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "shortText",
+        "mentionOccurrenceCount": 1,
+        "distinctMentionMidCount": 1,
+        "effectiveTextLength": 2,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "shortText"
+        ]
+      }
+    },
+    {
+      "caseId": "five_effective_characters_are_not_short",
+      "description": "The default short text boundary is inclusive only through four characters.",
+      "coverage": [
+        "shortTextBoundary"
+      ],
+      "input": {
+        "message": "真的很好看",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "none",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 5,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": []
+      }
+    },
+    {
+      "caseId": "unicode_emoji_only",
+      "description": "Unicode emoji-only content is a pure emote candidate, not short text.",
+      "coverage": [
+        "pureEmote",
+        "candidateExclusivity"
+      ],
+      "input": {
+        "message": "😀😀😀😀😀",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "pureEmote",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "pureEmote"
+        ]
+      }
+    },
+    {
+      "caseId": "structured_emote_only",
+      "description": "A structured emote token is removed before classification.",
+      "coverage": [
+        "pureEmote",
+        "candidateExclusivity"
+      ],
+      "input": {
+        "message": "[doge]",
+        "atNameToMid": {},
+        "structuredEmotes": [
+          "[doge]"
+        ],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "pureEmote",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "pureEmote"
+        ]
+      }
+    },
+    {
+      "caseId": "structured_emote_with_short_text",
+      "description": "After removing a structured emote, remaining text can be a short-text candidate.",
+      "coverage": [
+        "shortText",
+        "candidateExclusivity",
+        "effectiveLength"
+      ],
+      "input": {
+        "message": "好[doge]",
+        "atNameToMid": {},
+        "structuredEmotes": [
+          "[doge]"
+        ],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "shortText",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 1,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "shortText"
+        ]
+      }
+    },
+    {
+      "caseId": "picture_only",
+      "description": "A picture-only reply is a review candidate.",
+      "coverage": [
+        "pureImage",
+        "candidateExclusivity"
+      ],
+      "input": {
+        "message": "",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": true,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "pureImage",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": true,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "pureImage"
+        ]
+      }
+    },
+    {
+      "caseId": "mixed_emote_and_picture_is_not_pure",
+      "description": "Mixed structured media stays unclassified to preserve the conservative boundary.",
+      "coverage": [
+        "candidateExclusivity"
+      ],
+      "input": {
+        "message": "[doge]",
+        "atNameToMid": {},
+        "structuredEmotes": [
+          "[doge]"
+        ],
+        "hasPictures": true,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "none",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 0,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": []
+      }
+    },
+    {
+      "caseId": "fish_nickname_is_weak_evidence",
+      "description": "A fish-like nickname remains supporting evidence and cannot classify by itself.",
+      "coverage": [
+        "fishNicknameWeakEvidence"
+      ],
+      "input": {
+        "message": "这是一条普通评论",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "肥鱼助手",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "none",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 8,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [
+          "fishLikeNickname"
+        ],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "fishLikeNickname"
+        ]
+      }
+    },
+    {
+      "caseId": "template_style_does_not_auto_filter",
+      "description": "Template style signals are explainable support but cannot trigger filtering alone.",
+      "coverage": [
+        "templateStyle"
+      ],
+      "input": {
+        "message": "只要把实力隐藏起来，系统就会识别出来，然后把你放进舒适的匹配池。这并不是演，而是骗过了匹配机制。",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "none",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 43,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [
+          "contrastTemplate",
+          "causalChain"
+        ],
+        "matchesBalancedAiFilter": false,
+        "reasonLabels": [
+          "contrastTemplate",
+          "causalChain"
+        ]
+      }
+    },
+    {
+      "caseId": "model_disclosure_remains_high_confidence_ai_evidence",
+      "description": "Existing explicit model disclosure semantics remain unchanged.",
+      "coverage": [
+        "modelDisclosure"
+      ],
+      "input": {
+        "message": "作为一个 AI 语言模型，我无法判断。",
+        "atNameToMid": {},
+        "structuredEmotes": [],
+        "hasPictures": false,
+        "nickname": "",
+        "repeatedMentionCount": 0,
+        "config": {
+          "foldPureMentions": false,
+          "multipleMentionThreshold": 2,
+          "shortTextMaxCharacters": 4
+        }
+      },
+      "expected": {
+        "candidateType": "none",
+        "mentionOccurrenceCount": 0,
+        "distinctMentionMidCount": 0,
+        "effectiveTextLength": 15,
+        "shouldFold": false,
+        "pendingReview": false,
+        "shouldPermanentlyBlock": false,
+        "aiSignals": [
+          "modelDisclosure"
+        ],
+        "matchesBalancedAiFilter": true,
+        "reasonLabels": [
+          "modelDisclosure"
+        ]
+      }
+    }
+  ]
+}
