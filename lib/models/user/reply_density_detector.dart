@@ -253,6 +253,30 @@ abstract final class ReplyDensityDetector {
   }
 }
 
+
+class ReplyPurifyVideoSession {
+  ReplyPurifyVideoSession({required this.videoId});
+
+  final int videoId;
+  final Set<int> _ignoredReplyIds = <int>{};
+
+  Set<int> get ignoredReplyIds => Set.unmodifiable(_ignoredReplyIds);
+
+  int get ignoredCount => _ignoredReplyIds.length;
+
+  bool isIgnored(int replyId) => _ignoredReplyIds.contains(replyId);
+
+  bool ignore(int replyId) => replyId > 0 && _ignoredReplyIds.add(replyId);
+
+  bool restore(int replyId) => _ignoredReplyIds.remove(replyId);
+
+  bool clearIgnored() {
+    if (_ignoredReplyIds.isEmpty) return false;
+    _ignoredReplyIds.clear();
+    return true;
+  }
+}
+
 class _MentionScan {
   const _MentionScan({
     required this.remaining,

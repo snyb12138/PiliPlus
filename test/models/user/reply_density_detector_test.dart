@@ -123,4 +123,35 @@ void main() {
     );
   });
 
+
+  group('per-video purify session', () {
+    test('ignored replies stay isolated by video', () {
+      final first = ReplyPurifyVideoSession(videoId: 100);
+      final second = ReplyPurifyVideoSession(videoId: 200);
+
+      expect(first.ignore(9001), isTrue);
+      expect(first.ignore(9001), isFalse);
+      expect(first.isIgnored(9001), isTrue);
+      expect(second.isIgnored(9001), isFalse);
+      expect(first.ignoredReplyIds, const {9001});
+    });
+
+    test('ignored replies can be restored without touching permanent rules', () {
+      final session = ReplyPurifyVideoSession(videoId: 100);
+
+      expect(session.ignore(0), isFalse);
+      expect(session.ignore(9001), isTrue);
+      expect(session.restore(9001), isTrue);
+      expect(session.restore(9001), isFalse);
+      expect(session.ignoredCount, 0);
+
+      session
+        ..ignore(9002)
+        ..ignore(9003);
+      expect(session.clearIgnored(), isTrue);
+      expect(session.clearIgnored(), isFalse);
+      expect(session.ignoredReplyIds, isEmpty);
+    });
+  });
+
 }

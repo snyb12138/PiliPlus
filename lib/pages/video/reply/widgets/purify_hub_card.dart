@@ -2,15 +2,24 @@ import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ReplyPurifyHubCard extends StatefulWidget {
-  const ReplyPurifyHubCard({super.key, required this.onChanged});
+  const ReplyPurifyHubCard({
+    super.key,
+    required this.onChanged,
+    required this.ignoredForVideoCount,
+    required this.onRestoreIgnoredForVideo,
+  });
 
   final VoidCallback onChanged;
+  final int ignoredForVideoCount;
+  final VoidCallback onRestoreIgnoredForVideo;
 
   @override
   State<ReplyPurifyHubCard> createState() => _ReplyPurifyHubCardState();
@@ -26,6 +35,14 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
 
   Future<void> _open(String route) async {
     await Get.toNamed(route);
+    if (!mounted) return;
+    setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _setPureMentionFold(bool value) async {
+    ReplyGrpc.blockAtOnlyReply = value;
+    await GStorage.setting.put(SettingBoxKey.blockAtOnlyReply, value);
     if (!mounted) return;
     setState(() {});
     widget.onChanged();
@@ -85,7 +102,8 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
     final summary =
         '${config.mutedUsers.length} 个屏蔽账号 · '
         '${config.markedUsers.length} 个标记 · '
-        '关键词${keywordEnabled ? '已启用' : '未启用'}';
+        '关键词${keywordEnabled ? '已启用' : '未启用'}'
+        '${widget.ignoredForVideoCount == 0 ? '' : ' · 本视频忽略 ${widget.ignoredForVideoCount} 条'}';
 
     if (config.centerMode == ReplyPurifyCenterMode.collapsed) {
       return Card(
@@ -171,6 +189,20 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
                     videoKeywordEnabled ? '视频关键词·已启用' : '视频关键词',
                   ),
                 ),
+                FilterChip(
+                  selected: ReplyGrpc.blockAtOnlyReply,
+                  avatar: const Icon(Icons.alternate_email, size: 16),
+                  label: const Text('纯 @ 折叠'),
+                  onSelected: _setPureMentionFold,
+                ),
+                if (widget.ignoredForVideoCount > 0)
+                  ActionChip(
+                    avatar: const Icon(Icons.restore, size: 16),
+                    label: Text(
+                      '恢复本视频忽略 ${widget.ignoredForVideoCount}',
+                    ),
+                    onPressed: widget.onRestoreIgnoredForVideo,
+                  ),
                 if (config.aiFilterLevel != ReplyAiFilterLevel.off)
                   Chip(
                     avatar: const Icon(Icons.auto_awesome_outlined, size: 16),

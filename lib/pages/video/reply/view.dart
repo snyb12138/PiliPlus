@@ -9,6 +9,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show MainListReply, ReplyInfo;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/pages/common/fab_mixin.dart';
 import 'package:PiliPlus/pages/common/reply/reply_footer_mixin.dart';
@@ -47,6 +48,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   late ColorScheme colorScheme;
   @override
   late VideoReplyController controller;
+  late ReplyPurifyVideoSession _purifySession;
 
   String get heroTag => widget.heroTag;
 
@@ -57,6 +59,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   void initState() {
     super.initState();
     controller = Get.find<VideoReplyController>(tag: heroTag);
+    _purifySession = ReplyPurifyVideoSession(videoId: controller.oid);
     if (controller.loadingState.value is Loading) {
       controller.queryData();
     }
@@ -74,9 +77,18 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     if (mounted) setState(() {});
   }
 
+  void _restoreIgnoredForVideo() {
+    if (_purifySession.clearIgnored() && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    if (_purifySession.videoId != controller.oid) {
+      _purifySession = ReplyPurifyVideoSession(videoId: controller.oid);
+    }
     final purifyMode = ReplyGrpc.replyPurifyConfig.centerMode;
     return fabAnimWrapper(
       child: refreshIndicator(
@@ -139,6 +151,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               if (purifyMode != ReplyPurifyCenterMode.hidden)
                 SliverToBoxAdapter(
                   child: ReplyPurifyHubCard(
+                    ignoredForVideoCount: _purifySession.ignoredCount,
+                    onRestoreIgnoredForVideo: _restoreIgnoredForVideo,
                     onChanged: () {
                       if (mounted) setState(() {});
                     },
@@ -222,6 +236,10 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     controller.aid,
                     controller.videoType.replyType,
                   ),
+                  purifySession: _purifySession,
+                  onPurifySessionChanged: () {
+                    if (mounted) setState(() {});
+                  },
                 );
                 if (item.id == controller.targetRootRpId) {
                   return controller.colorAnimWrapper(
