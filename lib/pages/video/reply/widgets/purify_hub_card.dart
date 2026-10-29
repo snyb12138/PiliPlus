@@ -1,5 +1,6 @@
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -15,11 +16,17 @@ class ReplyPurifyHubCard extends StatefulWidget {
     required this.onChanged,
     required this.ignoredForVideoCount,
     required this.onRestoreIgnoredForVideo,
+    required this.undoAction,
+    required this.onUndoAction,
+    required this.onPurifyAction,
   });
 
   final VoidCallback onChanged;
   final int ignoredForVideoCount;
   final VoidCallback onRestoreIgnoredForVideo;
+  final ReplyPurifyUndoAction? undoAction;
+  final Future<void> Function() onUndoAction;
+  final Future<void> Function(ReplyPurifyUndoAction action) onPurifyAction;
 
   @override
   State<ReplyPurifyHubCard> createState() => _ReplyPurifyHubCardState();
@@ -49,8 +56,9 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
   }
 
   Future<void> _editKeywords() async {
+    final previousPattern = ReplyGrpc.replyRegExp.pattern;
     final controller = TextEditingController(
-      text: ReplyGrpc.replyRegExp.pattern,
+      text: previousPattern,
     );
     final pattern = await showDialog<String>(
       context: context,
@@ -80,6 +88,13 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
     if (!mounted || pattern == null) return;
     try {
       await ReplyGrpc.setReplyKeywordPattern(pattern);
+      if (pattern.trim() != previousPattern) {
+        await widget.onPurifyAction(
+          ReplyPurifyUndoAction.keywordPattern(
+            previousPattern: previousPattern,
+          ),
+        );
+      }
       if (!mounted) return;
       setState(() {});
       widget.onChanged();
@@ -202,6 +217,12 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
                       '恢复本视频忽略 ${widget.ignoredForVideoCount}',
                     ),
                     onPressed: widget.onRestoreIgnoredForVideo,
+                  ),
+                if (widget.undoAction case final action?)
+                  ActionChip(
+                    avatar: const Icon(Icons.undo, size: 16),
+                    label: Text('撤销：${action.label}'),
+                    onPressed: () => widget.onUndoAction(),
                   ),
                 if (config.aiFilterLevel != ReplyAiFilterLevel.off)
                   Chip(
