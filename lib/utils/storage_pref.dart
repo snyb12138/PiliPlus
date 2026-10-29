@@ -88,6 +88,18 @@ abstract final class Pref {
   static Future<void> setReplyPurifyConfig(ReplyPurifyConfig config) =>
       _localCache.put(LocalCacheKey.replyPurifyConfig, config.toStorage());
 
+  static Map<String, dynamic> get purifyV4BrowserExtension =>
+      PurifyConfigV4.sanitizeMap(
+        _localCache.get(LocalCacheKey.purifyV4BrowserExtension),
+      );
+
+  static Future<void> setPurifyV4BrowserExtension(
+    Map<String, dynamic> value,
+  ) => _localCache.put(
+    LocalCacheKey.purifyV4BrowserExtension,
+    PurifyConfigV4.sanitizeMap(value),
+  );
+
   static void setBlackMid(int mid) => _localCache.put(
     LocalCacheKey.blackMids,
     GlobalData().blackMids..add(mid),
