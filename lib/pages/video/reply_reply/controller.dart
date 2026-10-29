@@ -3,6 +3,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/reply/reply_sort_type.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/common/reply/fold/reply_fold_mixin.dart';
@@ -28,6 +29,7 @@ class VideoReplyReplyController extends ReplyController
     required this.rpid,
     required this.dialog,
     required this.replyType,
+    this.purifySession,
   });
   final int? dialog;
   int? id;
@@ -38,6 +40,30 @@ class VideoReplyReplyController extends ReplyController
   int rpid;
   @override
   int replyType;
+  final ReplyPurifyVideoSession? purifySession;
+
+  void _recordBlockedReply(ReplyInfo reply, List<String> reasons) {
+    purifySession?.recordPreview(
+      ReplyPurifyPreviewEntry(
+        replyId: reply.id.toInt(),
+        rootId: reply.root.toInt(),
+        parentId: reply.parent.toInt(),
+        mid: reply.mid.toInt(),
+        name: reply.member.name,
+        message: reply.content.message,
+        action: ReplyPurifyPreviewAction.blocked,
+        reasons: List.unmodifiable(reasons),
+      ),
+    );
+  }
+
+  @override
+  void onPurifyBlockedReply(ReplyInfo reply, List<String> reasons) =>
+      _recordBlockedReply(reply, reasons);
+
+  @override
+  bool isPurifyReplyIgnored(int replyId) =>
+      purifySession?.isIgnored(replyId) ?? false;
 
   bool hasRoot = false;
   final firstFloor = Rxn<ReplyInfo>();
@@ -131,6 +157,8 @@ class VideoReplyReplyController extends ReplyController
           root: rpid,
           dialog: dialog!,
           offset: paginationReply?.nextOffset,
+          onBlocked: _recordBlockedReply,
+          isIgnored: purifySession == null ? null : purifySession!.isIgnored,
         )
       : ReplyGrpc.detailList(
           type: replyType,
@@ -139,6 +167,8 @@ class VideoReplyReplyController extends ReplyController
           rpid: id ?? 0,
           mode: mode,
           offset: paginationReply?.nextOffset,
+          onBlocked: _recordBlockedReply,
+          isIgnored: purifySession == null ? null : purifySession!.isIgnored,
         );
 
   @override

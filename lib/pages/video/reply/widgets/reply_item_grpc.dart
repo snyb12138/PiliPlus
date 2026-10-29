@@ -56,148 +56,13 @@ import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:protobuf/protobuf.dart';
 
 part 'package:PiliPlus/common/widgets/context_menu/reply_menu_helper.dart';
-
-class _ReplyPurifyFold extends StatefulWidget {
-  const _ReplyPurifyFold({
-    super.key,
-    required this.reply,
-    required this.assessment,
-    required this.child,
-    this.compact = false,
-    this.onIgnoreForVideo,
-  });
-
-  final ReplyInfo reply;
-  final ReplyDensityAssessment assessment;
-  final Widget child;
-  final bool compact;
-  final ValueChanged<ReplyInfo>? onIgnoreForVideo;
-
-  @override
-  State<_ReplyPurifyFold> createState() => _ReplyPurifyFoldState();
-}
-
-class _ReplyPurifyFoldState extends State<_ReplyPurifyFold> {
-  var _revealed = false;
-
-  Future<void> _trustAiUser() async {
-    await ReplyGrpc.trustAiReplyUser(
-      widget.reply.mid.toInt(),
-      name: widget.reply.member.name,
-    );
-    if (!mounted) return;
-    setState(() => _revealed = true);
-    SmartDialog.showToast('已信任该账号，其评论不再参与 AI 检测');
-  }
-
-  String _densitySummary(ReplyDensityAssessment assessment) {
-    return switch (assessment.candidateType) {
-      ReplyDensityCandidateType.singlePureMention => '仅包含 1 次真实 @',
-      ReplyDensityCandidateType.multiplePureMentions =>
-        '仅包含 ${assessment.mentionOccurrenceCount} 次真实 @'
-            '（${assessment.distinctMentionMidCount} 个不同账号）',
-      _ => '',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final foldDensity = ReplyGrpc.shouldFoldDensityReply(
-      widget.reply,
-      widget.assessment,
-    );
-    final foldAi = ReplyGrpc.shouldFoldAiReply(
-      widget.reply,
-      widget.assessment.aiAssessment,
-    );
-    if (_revealed || (!foldDensity && !foldAi)) {
-      return widget.child;
-    }
-
-    final reasons = <String>[
-      if (foldDensity) _densitySummary(widget.assessment),
-      if (foldAi && widget.assessment.aiAssessment.summary.isNotEmpty)
-        widget.assessment.aiAssessment.summary,
-      if (foldAi && widget.assessment.aiAssessment.summary.isEmpty)
-        '疑似 AI 评论',
-    ];
-    final colorScheme = ColorScheme.of(context);
-    final child = Material(
-      type: MaterialType.transparency,
-      child: Padding(
-        padding: widget.compact
-            ? const .fromLTRB(8, 6, 8, 6)
-            : const .fromLTRB(14, 10, 12, 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(
-              foldAi
-                  ? Icons.auto_awesome_outlined
-                  : Icons.alternate_email,
-              size: widget.compact ? 16 : 20,
-              color: colorScheme.secondary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '已折叠 @${widget.reply.member.name}：${reasons.join(' · ')}',
-                maxLines: widget.compact ? 2 : 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: widget.compact ? 12 : 13,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(() => _revealed = true),
-              child: const Text('查看'),
-            ),
-            if (widget.onIgnoreForVideo != null)
-              if (widget.compact)
-                IconButton(
-                  tooltip: '本视频忽略',
-                  onPressed: () =>
-                      widget.onIgnoreForVideo!(widget.reply),
-                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
-                )
-              else
-                TextButton(
-                  onPressed: () =>
-                      widget.onIgnoreForVideo!(widget.reply),
-                  child: const Text('本视频忽略'),
-                ),
-            if (foldAi && !widget.compact)
-              TextButton(
-                onPressed: _trustAiUser,
-                child: const Text('信任 AI'),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (widget.compact) return child;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        child,
-        Divider(
-          indent: 55,
-          endIndent: 15,
-          height: 0.3,
-          color: colorScheme.outline.withValues(alpha: 0.08),
-        ),
-      ],
-    );
-  }
-}
 
 class _ReplyPurifyQuickActions extends StatefulWidget {
   const _ReplyPurifyQuickActions({
@@ -318,7 +183,6 @@ class ReplyItemGrpc extends StatelessWidget {
     this.onToggleTop,
     this.jumpToDialogue,
     this.purifySession,
-    this.onPurifySessionChanged,
     this.onPurifyAction,
   });
   final ReplyInfo replyItem;
@@ -335,13 +199,42 @@ class ReplyItemGrpc extends StatelessWidget {
   final ValueChanged<ReplyInfo>? onToggleTop;
   final VoidCallback? jumpToDialogue;
   final ReplyPurifyVideoSession? purifySession;
-  final VoidCallback? onPurifySessionChanged;
   final Future<void> Function(ReplyPurifyUndoAction action)? onPurifyAction;
 
-  void _ignorePurifyReply(ReplyInfo reply) {
-    if (purifySession?.ignore(reply.id.toInt()) ?? false) {
-      onPurifySessionChanged?.call();
-    }
+  void _recordFoldedReply(
+    ReplyInfo reply,
+    ReplyDensityAssessment assessment, {
+    required bool foldDensity,
+    required bool foldAi,
+  }) {
+    final session = purifySession;
+    if (session == null || session.isIgnored(reply.id.toInt())) return;
+    final reasons = <String>[
+      if (foldDensity)
+        switch (assessment.candidateType) {
+          ReplyDensityCandidateType.singlePureMention => '仅包含 1 次真实 @',
+          ReplyDensityCandidateType.multiplePureMentions =>
+            '仅包含 ${assessment.mentionOccurrenceCount} 次真实 @',
+          _ => '低信息密度评论',
+        },
+      if (foldAi && assessment.aiAssessment.summary.isNotEmpty)
+        assessment.aiAssessment.summary,
+      if (foldAi && assessment.aiAssessment.summary.isEmpty) '疑似 AI 评论',
+    ];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      session.recordPreview(
+        ReplyPurifyPreviewEntry(
+          replyId: reply.id.toInt(),
+          rootId: reply.root.toInt(),
+          parentId: reply.parent.toInt(),
+          mid: reply.mid.toInt(),
+          name: reply.member.name,
+          message: reply.content.message,
+          action: ReplyPurifyPreviewAction.folded,
+          reasons: List.unmodifiable(reasons),
+        ),
+      );
+    });
   }
 
   static final _voteRegExp = RegExp(r"^\{vote:\d+?\}$");
@@ -414,14 +307,13 @@ class ReplyItemGrpc extends StatelessWidget {
     if (!ignoredForVideo &&
         replyItem.mid != upMid &&
         (foldDensity || foldAi)) {
-      return _ReplyPurifyFold(
-        key: ValueKey(replyItem.id),
-        reply: replyItem,
-        assessment: assessment,
-        onIgnoreForVideo:
-            onPurifySessionChanged == null ? null : _ignorePurifyReply,
-        child: buildReply(),
+      _recordFoldedReply(
+        replyItem,
+        assessment,
+        foldDensity: foldDensity,
+        foldAi: foldAi,
       );
+      return const SizedBox.shrink();
     }
     return buildReply();
   }
@@ -970,16 +862,13 @@ class ReplyItemGrpc extends StatelessWidget {
                 if (!ignoredForVideo &&
                     childReply.mid != upMid &&
                     (foldDensity || foldAi)) {
-                  return _ReplyPurifyFold(
-                    key: ValueKey(childReply.id),
-                    reply: childReply,
-                    assessment: assessment,
-                    compact: true,
-                    onIgnoreForVideo: onPurifySessionChanged == null
-                        ? null
-                        : _ignorePurifyReply,
-                    child: child,
+                  _recordFoldedReply(
+                    childReply,
+                    assessment,
+                    foldDensity: foldDensity,
+                    foldAi: foldAi,
                   );
+                  return const SizedBox.shrink();
                 }
                 return child;
               }),

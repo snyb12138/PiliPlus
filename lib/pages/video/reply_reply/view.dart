@@ -11,6 +11,7 @@ import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/pages/common/reply/reply_footer_mixin.dart';
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
@@ -39,6 +40,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
     required this.replyType,
     this.isNested = false,
     this.upMid,
+    this.purifySession,
   });
   final int? id;
   final int oid;
@@ -49,6 +51,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
   final int replyType;
   final bool isNested;
   final Int64? upMid;
+  final ReplyPurifyVideoSession? purifySession;
 
   static Future<void>? toReply({
     required int oid,
@@ -128,6 +131,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         rpid: widget.rpid,
         dialog: widget.dialog,
         replyType: widget.replyType,
+        purifySession: widget.purifySession,
       ),
       tag: _tag,
     );
@@ -227,6 +231,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             onReply: (replyItem) => controller.onReply(replyItem, index: -1),
             upMid: widget.upMid ?? controller.upMid,
             onCheckReply: controller.onCheckReply,
+            purifySession: widget.purifySession,
           ),
         ),
         SliverToBoxAdapter(
@@ -324,6 +329,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           replyType: widget.replyType,
           isVideoDetail: true,
           isNested: widget.isNested,
+          purifySession: widget.purifySession,
         ),
       ),
       jumpToDialogue: () {
@@ -332,6 +338,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         }
       },
       onCheckReply: controller.onCheckReply,
+      purifySession: widget.purifySession,
     );
   }
 }

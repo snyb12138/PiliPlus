@@ -19,6 +19,7 @@ class ReplyPurifyHubCard extends StatefulWidget {
     required this.undoAction,
     required this.onUndoAction,
     required this.onPurifyAction,
+    this.embedded = false,
   });
 
   final VoidCallback onChanged;
@@ -27,6 +28,7 @@ class ReplyPurifyHubCard extends StatefulWidget {
   final ReplyPurifyUndoAction? undoAction;
   final Future<void> Function() onUndoAction;
   final Future<void> Function(ReplyPurifyUndoAction action) onPurifyAction;
+  final bool embedded;
 
   @override
   State<ReplyPurifyHubCard> createState() => _ReplyPurifyHubCardState();
@@ -127,7 +129,8 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
         '关键词${keywordEnabled ? '已启用' : '未启用'}'
         '${widget.ignoredForVideoCount == 0 ? '' : ' · 本视频忽略 ${widget.ignoredForVideoCount} 条'}';
 
-    if (config.centerMode == ReplyPurifyCenterMode.collapsed) {
+    if (!widget.embedded &&
+        config.centerMode == ReplyPurifyCenterMode.collapsed) {
       return Card(
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
         child: ListTile(
@@ -166,22 +169,25 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
               leading: const Icon(Icons.shield_outlined),
               title: const Text('屏蔽中心'),
               subtitle: Text(summary),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: '折叠',
-                    onPressed: () =>
-                        _setMode(ReplyPurifyCenterMode.collapsed),
-                    icon: const Icon(Icons.expand_less),
-                  ),
-                  IconButton(
-                    tooltip: '隐藏',
-                    onPressed: () => _setMode(ReplyPurifyCenterMode.hidden),
-                    icon: const Icon(Icons.visibility_off_outlined),
-                  ),
-                ],
-              ),
+              trailing: widget.embedded
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: '折叠',
+                          onPressed: () =>
+                              _setMode(ReplyPurifyCenterMode.collapsed),
+                          icon: const Icon(Icons.expand_less),
+                        ),
+                        IconButton(
+                          tooltip: '隐藏',
+                          onPressed: () =>
+                              _setMode(ReplyPurifyCenterMode.hidden),
+                          icon: const Icon(Icons.visibility_off_outlined),
+                        ),
+                      ],
+                    ),
             ),
             Wrap(
               spacing: 8,

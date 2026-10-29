@@ -1,15 +1,24 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
+import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PurifyCenterPage extends StatefulWidget {
-  const PurifyCenterPage({super.key, this.showAppBar = true});
+  const PurifyCenterPage({
+    super.key,
+    this.showAppBar = true,
+    this.videoSession,
+    this.onReplyReload,
+  });
 
   final bool showAppBar;
+  final ReplyPurifyVideoSession? videoSession;
+  final Future<void> Function()? onReplyReload;
 
   @override
   State<PurifyCenterPage> createState() => _PurifyCenterPageState();
@@ -27,8 +36,130 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     }
   }
 
+  Future<void> _reloadReplies() async {
+    await widget.onReplyReload?.call();
+  }
+
+  Future<void> _recordPurifyAction(ReplyPurifyUndoAction action) async {
+    widget.videoSession?.rememberUndo(action);
+    if (action.requiresReplyReload) await _reloadReplies();
+  }
+
+  Future<void> _undoPurifyAction() async {
+    final session = widget.videoSession;
+    final action = session?.undoAction;
+    if (session == null || action == null) return;
+    switch (action.type) {
+      case ReplyPurifyUndoActionType.muteUser:
+        await ReplyGrpc.unmuteReplyUser(action.mid);
+        break;
+      case ReplyPurifyUndoActionType.markUser:
+        await ReplyGrpc.unmarkReplyUser(action.mid);
+        break;
+      case ReplyPurifyUndoActionType.unmarkUser:
+        await ReplyGrpc.markReplyUser(action.mid, name: action.name);
+        break;
+      case ReplyPurifyUndoActionType.keywordPattern:
+        await ReplyGrpc.setReplyKeywordPattern(action.previousKeywordPattern);
+        break;
+    }
+    session.clearUndo(action);
+    if (action.requiresReplyReload) await _reloadReplies();
+  }
+
+  Future<void> _restoreIgnoredForVideo() async {
+    if (widget.videoSession?.clearIgnored() ?? false) {
+      await _reloadReplies();
+    }
+  }
+
+  Future<void> _showForVideo(ReplyPurifyPreviewEntry entry) async {
+    if (widget.videoSession?.ignore(entry.replyId) ?? false) {
+      await _reloadReplies();
+    }
+  }
+
+  Widget _buildVideoPreview(ReplyPurifyVideoSession session) {
+    final entries = session.previewEntries;
+    final groups = <int, List<ReplyPurifyPreviewEntry>>{};
+    for (final entry in entries) {
+      groups.putIfAbsent(entry.threadId, () => []).add(entry);
+    }
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.visibility_outlined),
+            title: const Text('本视频净化记录'),
+            subtitle: Text(
+              '已折叠 ${session.foldedCount} 条 · 已屏蔽 ${session.blockedCount} 条',
+            ),
+          ),
+          if (entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text('当前已加载评论中没有折叠或屏蔽内容。'),
+            )
+          else
+            ...groups.values.map((items) {
+              final first = items.first;
+              return ExpansionTile(
+                leading: Icon(
+                  items.any(
+                    (item) =>
+                        item.action == ReplyPurifyPreviewAction.blocked,
+                  )
+                      ? Icons.comments_disabled_outlined
+                      : Icons.auto_awesome_outlined,
+                ),
+                title: Text('@${first.name.isEmpty ? first.mid : first.name}'),
+                subtitle: Text(
+                  '${items.length} 条 · ${items.expand((item) => item.reasons).toSet().join('、')}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                children: items.map((entry) {
+                  final actionLabel =
+                      entry.action == ReplyPurifyPreviewAction.folded
+                      ? '已折叠'
+                      : '已屏蔽';
+                  return ListTile(
+                    contentPadding: const EdgeInsets.fromLTRB(32, 4, 12, 8),
+                    title: Text(
+                      entry.message.isEmpty ? '（无文字内容）' : entry.message,
+                    ),
+                    subtitle: Text('$actionLabel · ${entry.reasons.join('、')}'),
+                    trailing: TextButton(
+                      onPressed: () => _showForVideo(entry),
+                      child: const Text('本视频显示'),
+                    ),
+                  );
+                }).toList(),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final session = widget.videoSession;
+    if (session != null) {
+      return ListenableBuilder(
+        listenable: session,
+        builder: (context, _) => _buildPage(context, session),
+      );
+    }
+    return _buildPage(context, null);
+  }
+
+  Widget _buildPage(
+    BuildContext context,
+    ReplyPurifyVideoSession? session,
+  ) {
     final danmaku = Pref.danmakuAssistantConfig;
     final ruleCount = danmaku.absoluteRules.length + danmaku.gentleRules.length;
     final formatCount = [
@@ -58,6 +189,22 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
           padding.bottom + 100,
         ),
         children: [
+          if (session != null) ...[
+            _buildVideoPreview(session),
+            const SizedBox(height: 8),
+            ReplyPurifyHubCard(
+              embedded: true,
+              ignoredForVideoCount: session.ignoredCount,
+              onRestoreIgnoredForVideo: _restoreIgnoredForVideo,
+              undoAction: session.undoAction,
+              onUndoAction: _undoPurifyAction,
+              onPurifyAction: _recordPurifyAction,
+              onChanged: () {
+                if (mounted) setState(() {});
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),

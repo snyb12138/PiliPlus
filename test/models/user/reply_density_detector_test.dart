@@ -192,6 +192,66 @@ void main() {
       expect(added.label, '标记 @测试账号');
       expect(removed.label, '取消标记 @测试账号');
     });
+
+    test('preview records are deduplicated and blocked wins over folded', () {
+      final session = ReplyPurifyVideoSession(videoId: 100);
+      const folded = ReplyPurifyPreviewEntry(
+        replyId: 9001,
+        rootId: 0,
+        parentId: 0,
+        mid: 42,
+        name: '测试账号',
+        message: '测试评论',
+        action: ReplyPurifyPreviewAction.folded,
+        reasons: ['多次 @ 同一账号'],
+      );
+      const blocked = ReplyPurifyPreviewEntry(
+        replyId: 9001,
+        rootId: 0,
+        parentId: 0,
+        mid: 42,
+        name: '测试账号',
+        message: '测试评论',
+        action: ReplyPurifyPreviewAction.blocked,
+        reasons: ['关键词规则'],
+      );
+
+      expect(session.recordPreview(folded), isTrue);
+      expect(session.recordPreview(folded), isFalse);
+      expect(session.hiddenCount, 1);
+      expect(session.foldedCount, 1);
+
+      expect(session.recordPreview(blocked), isTrue);
+      expect(session.hiddenCount, 1);
+      expect(session.foldedCount, 0);
+      expect(session.blockedCount, 1);
+      expect(
+        session.previewEntries.single.reasons,
+        ['多次 @ 同一账号', '关键词规则'],
+      );
+    });
+
+    test('showing one reply removes it from the preview for this video', () {
+      final session = ReplyPurifyVideoSession(videoId: 100);
+      const entry = ReplyPurifyPreviewEntry(
+        replyId: 9001,
+        rootId: 8000,
+        parentId: 8000,
+        mid: 42,
+        name: '测试账号',
+        message: '测试评论',
+        action: ReplyPurifyPreviewAction.blocked,
+        reasons: ['评论账号屏蔽'],
+      );
+
+      session.recordPreview(entry);
+      expect(session.ignore(9001), isTrue);
+      expect(session.hiddenCount, 0);
+      expect(session.recordPreview(entry), isFalse);
+      expect(session.isIgnored(9001), isTrue);
+      expect(session.restore(9001), isTrue);
+      expect(session.recordPreview(entry), isTrue);
+    });
   });
 
 }
