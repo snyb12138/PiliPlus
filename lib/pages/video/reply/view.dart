@@ -99,12 +99,16 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     switch (action.type) {
       case ReplyPurifyUndoActionType.muteUser:
         await ReplyGrpc.unmuteReplyUser(action.mid);
+        break;
       case ReplyPurifyUndoActionType.markUser:
         await ReplyGrpc.unmarkReplyUser(action.mid);
+        break;
       case ReplyPurifyUndoActionType.unmarkUser:
         await ReplyGrpc.markReplyUser(action.mid, name: action.name);
+        break;
       case ReplyPurifyUndoActionType.keywordPattern:
         await ReplyGrpc.setReplyKeywordPattern(action.previousKeywordPattern);
+        break;
     }
 
     _purifySession.clearUndo(action);
