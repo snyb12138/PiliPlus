@@ -262,6 +262,7 @@ abstract final class LocalCacheKey {
       danmakuFilterRules = 'danmakuFilterRules',
       danmakuAssistantConfig = 'danmakuAssistantConfig',
       replyPurifyConfig = 'replyPurifyConfig',
+      purifyV4BrowserExtension = 'purifyV4BrowserExtension',
       mixinKey = 'mixinKey',
       timeStamp = 'timeStamp';
 }
