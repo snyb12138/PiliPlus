@@ -335,11 +335,9 @@ abstract final class ConfigArchive {
             .toList(growable: false),
         _ => <String>[],
       };
-      final filter = RuleFilter(
+      final filter = RuleFilter.fromRawPatterns(
         strings('keywords'),
-        strings('regex')
-            .map((pattern) => RegExp(pattern, caseSensitive: false))
-            .toList(growable: false),
+        strings('regex'),
         strings('uidHashes').toSet(),
       );
       await GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filter);
