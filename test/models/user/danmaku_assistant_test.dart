@@ -83,7 +83,7 @@ void main() {
     expect(PurifyRegexSafety.validate(r'^(a+)+$').ok, isFalse);
     expect(PurifyRegexSafety.validate(r'(a)\1').ok, isFalse);
     expect(
-      PurifyRegexSafety.validate('a' * 257).ok,
+      PurifyRegexSafety.validate(List.filled(257, 'a').join()).ok,
       isFalse,
     );
   });
