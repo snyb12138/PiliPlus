@@ -9,6 +9,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
 import 'package:PiliPlus/models/user/video_purify.dart';
 import 'package:PiliPlus/pages/my_reply/view.dart';
@@ -211,12 +212,37 @@ abstract final class ConfigArchive {
 
   static String _exportBlacklist() => jsonEncode(Pref.blackMids.toList());
 
-  static String _exportPurify() => jsonEncode({
-    'version': 2,
-    'danmakuAssistant': Pref.danmakuAssistantConfig.toStorage(),
-    'replyPurify': ReplyGrpc.replyPurifyConfig.toStorage(),
-    'videoPurify': RecommendFilter.videoPurifyConfig.toStorage(),
-  });
+  static Map<String, dynamic> exportPurifyConfig() {
+    final reply = Map<String, dynamic>.from(
+      ReplyGrpc.replyPurifyConfig.toStorage(),
+    )..remove('version');
+    final danmakuRules = Pref.danmakuFilterRule;
+    return <String, dynamic>{
+      'schema': PurifyConfigV4.schema,
+      'version': PurifyConfigV4.version,
+      ...reply,
+      'replyKeywordPattern': ReplyGrpc.replyRegExp.pattern,
+      'danmakuAssistant': Pref.danmakuAssistantConfig.toStorage(),
+      'danmakuRules': {
+        'keywords': danmakuRules.dmFilterString,
+        'regex': danmakuRules.dmRegExp
+            .map((regexp) => regexp.pattern)
+            .toList(growable: false),
+        'uidHashes': danmakuRules.dmUid.toList(growable: false)..sort(),
+      },
+      'uploaderRules': {
+        'version': 1,
+        'users': Pref.blackMids
+            .map((mid) => <String, dynamic>{'mid': mid})
+            .toList(growable: false)
+          ..sort((a, b) => (a['mid'] as int).compareTo(b['mid'] as int)),
+      },
+      'browserExtension': Pref.purifyV4BrowserExtension,
+      'videoPurify': RecommendFilter.videoPurifyConfig.toStorage(),
+    };
+  }
+
+  static String _exportPurify() => jsonEncode(exportPurifyConfig());
 
   static String? _exportReply() {
     final box = GStorage.reply;
@@ -272,24 +298,78 @@ abstract final class ConfigArchive {
     Pref.blackMids = set;
   }
 
-  static Future<void> _importPurify(Map<String, dynamic> data) async {
-    if (data['danmakuAssistant'] case final Map danmaku) {
+  static Future<void> importPurifyConfig(
+    Map<String, dynamic> data,
+  ) async {
+    final root = PurifyConfigV4.sanitizeMap(data);
+    final reply = PurifyConfigV4.replySection(root);
+
+    if (root['danmakuAssistant'] case final Map danmaku) {
       await GStorage.localCache.put(
         LocalCacheKey.danmakuAssistantConfig,
         DanmakuAssistantConfig.fromStorage(danmaku).toStorage(),
       );
     }
-    if (data['replyPurify'] case final Map reply) {
+    if (reply['mutedUsers'] is Iterable) {
       await ReplyGrpc.replaceReplyPurifyConfig(
         ReplyPurifyConfig.fromStorage(reply),
       );
     }
-    if (data['videoPurify'] case final Map video) {
+    final keywordPattern =
+        reply['replyKeywordPattern'] ?? root['replyKeywordPattern'];
+    if (keywordPattern is String) {
+      await ReplyGrpc.setReplyKeywordPattern(keywordPattern);
+    }
+    if (root['videoPurify'] case final Map video) {
       await RecommendFilter.applyVideoPurifyConfig(
         VideoPurifyConfig.fromStorage(video),
       );
     }
+    if (root['danmakuRules'] case final Map rules) {
+      List<String> strings(String key) => switch (rules[key]) {
+        final Iterable values => values
+            .whereType<String>()
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false),
+        _ => <String>[],
+      };
+      final filter = RuleFilter(
+        strings('keywords'),
+        strings('regex')
+            .map((pattern) => RegExp(pattern, caseSensitive: false))
+            .toList(growable: false),
+        strings('uidHashes').toSet(),
+      );
+      await GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filter);
+    }
+    if (root['uploaderRules'] case final Map uploader
+        when uploader['users'] is Iterable) {
+      final mids = <int>{};
+      for (final raw in uploader['users'] as Iterable) {
+        if (raw is! Map) continue;
+        final mid = switch (raw['mid']) {
+          int value => value,
+          String value => int.tryParse(value.trim()),
+          _ => null,
+        };
+        if (mid != null && mid > 0) mids.add(mid);
+      }
+      final set = GlobalData().blackMids
+        ..clear()
+        ..addAll(mids);
+      Pref.blackMids = set;
+    }
+    if (root['browserExtension'] case final Map browserExtension) {
+      await Pref.setPurifyV4BrowserExtension(
+        PurifyConfigV4.sanitizeMap(browserExtension),
+      );
+    }
   }
+
+  static Future<void> _importPurify(Map<String, dynamic> data) =>
+      importPurifyConfig(data);
 
   static void _importReply(List<dynamic> list) {
     final box = GStorage.reply;
