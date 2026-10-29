@@ -15,6 +15,9 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
 
+typedef ReplyPurifyBlockedCallback =
+    void Function(ReplyInfo reply, List<String> reasons);
+
 abstract final class ReplyGrpc {
   static bool antiGoodsReply = Pref.antiGoodsReply;
   static var blockAtOnlyReply = Pref.blockAtOnlyReply;
@@ -233,13 +236,46 @@ abstract final class ReplyGrpc {
         reply.content.atNameToMid.length >= blockReplyAtCount!;
   }
 
-  static bool needRemoveGrpc(ReplyInfo reply) {
+  static List<String> purifyBlockReasons(
+    ReplyInfo reply, {
+    bool Function(int replyId)? isIgnored,
+  }) {
+    if (isIgnored?.call(reply.id.toInt()) == true) return const [];
     final mid = reply.mid.toInt();
-    return replyPurifyConfig.contains(mid) ||
-        GlobalData().blackMids.contains(mid) ||
-        _blockReplyAtCount(reply) ||
-        (antiGoodsReply && _needRemoveGoodGrpc(reply)) ||
-        _matchesReplyKeyword(reply.content.message);
+    return [
+      if (replyPurifyConfig.contains(mid)) '评论账号屏蔽',
+      if (GlobalData().blackMids.contains(mid)) '全局账号屏蔽',
+      if (_blockReplyAtCount(reply)) '不同账号 @ 数量达到阈值',
+      if (antiGoodsReply && _needRemoveGoodGrpc(reply)) '带货评论',
+      if (_matchesReplyKeyword(reply.content.message)) '关键词规则',
+    ];
+  }
+
+  static bool needRemoveGrpc(
+    ReplyInfo reply, {
+    bool Function(int replyId)? isIgnored,
+  }) => purifyBlockReasons(reply, isIgnored: isIgnored).isNotEmpty;
+
+  static void _filterReplies(
+    List<ReplyInfo> replies, {
+    ReplyPurifyBlockedCallback? onBlocked,
+    bool Function(int replyId)? isIgnored,
+  }) {
+    replies.removeWhere((reply) {
+      final reasons = purifyBlockReasons(reply, isIgnored: isIgnored);
+      if (reasons.isNotEmpty) {
+        onBlocked?.call(reply, reasons);
+        return true;
+      }
+      if (reply.replies.isNotEmpty) {
+        _filterReplies(
+          reply.replies,
+          onBlocked: onBlocked,
+          isIgnored: isIgnored,
+        );
+      }
+      return false;
+    });
   }
 
   static Future<LoadingState<MainListReply>> mainList({
@@ -249,6 +285,8 @@ abstract final class ReplyGrpc {
     required Mode mode,
     required String? offset,
     required Int64? cursorNext,
+    ReplyPurifyBlockedCallback? onBlocked,
+    bool Function(int replyId)? isIgnored,
   }) async {
     final res = await GrpcReq.request(
       GrpcUrl.mainList,
@@ -272,18 +310,23 @@ abstract final class ReplyGrpc {
       _observeAiReplies(response.replies);
 
       // keyword filter
-      if (response.hasUpTop() && needRemoveGrpc(response.upTop)) {
-        response.clearUpTop();
+      if (response.hasUpTop()) {
+        final reasons = purifyBlockReasons(
+          response.upTop,
+          isIgnored: isIgnored,
+        );
+        if (reasons.isNotEmpty) {
+          onBlocked?.call(response.upTop, reasons);
+          response.clearUpTop();
+        }
       }
 
       if (response.replies.isNotEmpty) {
-        response.replies.removeWhere((item) {
-          final hasMatch = needRemoveGrpc(item);
-          if (!hasMatch && item.replies.isNotEmpty) {
-            item.replies.removeWhere(needRemoveGrpc);
-          }
-          return hasMatch;
-        });
+        _filterReplies(
+          response.replies,
+          onBlocked: onBlocked,
+          isIgnored: isIgnored,
+        );
       }
     }
     return res;
@@ -296,6 +339,8 @@ abstract final class ReplyGrpc {
     required int rpid,
     required Mode mode,
     required String? offset,
+    ReplyPurifyBlockedCallback? onBlocked,
+    bool Function(int replyId)? isIgnored,
   }) async {
     final res = await GrpcReq.request(
       GrpcUrl.detailList,
@@ -312,7 +357,11 @@ abstract final class ReplyGrpc {
     );
     if (res.dataOrNull case final response?) {
       _observeAiReplies(response.root.replies);
-      response.root.replies.removeWhere(needRemoveGrpc);
+      _filterReplies(
+        response.root.replies,
+        onBlocked: onBlocked,
+        isIgnored: isIgnored,
+      );
     }
     return res;
   }
@@ -321,6 +370,8 @@ abstract final class ReplyGrpc {
     required int type,
     required int oid,
     required FeedPagination pagination,
+    ReplyPurifyBlockedCallback? onBlocked,
+    bool Function(int replyId)? isIgnored,
   }) async {
     final res = await GrpcReq.request(
       GrpcUrl.foldList,
@@ -333,13 +384,11 @@ abstract final class ReplyGrpc {
     );
     if (res.dataOrNull case final response?) {
       _observeAiReplies(response.replies);
-      response.replies.removeWhere((item) {
-        final hasMatch = needRemoveGrpc(item);
-        if (!hasMatch && item.replies.isNotEmpty) {
-          item.replies.removeWhere(needRemoveGrpc);
-        }
-        return hasMatch;
-      });
+      _filterReplies(
+        response.replies,
+        onBlocked: onBlocked,
+        isIgnored: isIgnored,
+      );
     }
     return res;
   }
@@ -350,6 +399,8 @@ abstract final class ReplyGrpc {
     required int root,
     required int dialog,
     required String? offset,
+    ReplyPurifyBlockedCallback? onBlocked,
+    bool Function(int replyId)? isIgnored,
   }) async {
     final res = await GrpcReq.request(
       GrpcUrl.dialogList,
@@ -364,7 +415,11 @@ abstract final class ReplyGrpc {
     );
     if (res.dataOrNull case final response?) {
       _observeAiReplies(response.replies);
-      response.replies.removeWhere(needRemoveGrpc);
+      _filterReplies(
+        response.replies,
+        onBlocked: onBlocked,
+        isIgnored: isIgnored,
+      );
     }
     return res;
   }

@@ -1,5 +1,6 @@
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:characters/characters.dart';
+import 'package:flutter/foundation.dart';
 
 enum ReplyDensityCandidateType {
   none,
@@ -315,19 +316,105 @@ class ReplyPurifyUndoAction {
   }
 }
 
-class ReplyPurifyVideoSession {
+enum ReplyPurifyPreviewAction { folded, blocked }
+
+class ReplyPurifyPreviewEntry {
+  const ReplyPurifyPreviewEntry({
+    required this.replyId,
+    required this.rootId,
+    required this.parentId,
+    required this.mid,
+    required this.name,
+    required this.message,
+    required this.action,
+    required this.reasons,
+  });
+
+  final int replyId;
+  final int rootId;
+  final int parentId;
+  final int mid;
+  final String name;
+  final String message;
+  final ReplyPurifyPreviewAction action;
+  final List<String> reasons;
+
+  int get threadId => rootId > 0 ? rootId : replyId;
+
+  ReplyPurifyPreviewEntry copyWith({
+    ReplyPurifyPreviewAction? action,
+    List<String>? reasons,
+  }) => ReplyPurifyPreviewEntry(
+    replyId: replyId,
+    rootId: rootId,
+    parentId: parentId,
+    mid: mid,
+    name: name,
+    message: message,
+    action: action ?? this.action,
+    reasons: reasons ?? this.reasons,
+  );
+}
+
+class ReplyPurifyVideoSession extends ChangeNotifier {
   ReplyPurifyVideoSession({required this.videoId});
+
+  static const int maxPreviewEntries = 200;
 
   final int videoId;
   final Set<int> _ignoredReplyIds = <int>{};
+  final Map<int, ReplyPurifyPreviewEntry> _previewEntries = {};
   ReplyPurifyUndoAction? _undoAction;
 
   Set<int> get ignoredReplyIds => Set.unmodifiable(_ignoredReplyIds);
 
   ReplyPurifyUndoAction? get undoAction => _undoAction;
 
+  List<ReplyPurifyPreviewEntry> get previewEntries =>
+      List.unmodifiable(_previewEntries.values.toList().reversed);
+
+  int get hiddenCount => _previewEntries.length;
+
+  int get foldedCount => _previewEntries.values
+      .where((entry) => entry.action == ReplyPurifyPreviewAction.folded)
+      .length;
+
+  int get blockedCount => _previewEntries.values
+      .where((entry) => entry.action == ReplyPurifyPreviewAction.blocked)
+      .length;
+
+  bool recordPreview(ReplyPurifyPreviewEntry entry) {
+    if (entry.replyId <= 0 || isIgnored(entry.replyId)) return false;
+    final previous = _previewEntries[entry.replyId];
+    if (previous != null) {
+      final action =
+          previous.action == ReplyPurifyPreviewAction.blocked ||
+              entry.action == ReplyPurifyPreviewAction.blocked
+          ? ReplyPurifyPreviewAction.blocked
+          : ReplyPurifyPreviewAction.folded;
+      final reasons = {...previous.reasons, ...entry.reasons}.toList();
+      if (action == previous.action && listEquals(reasons, previous.reasons)) {
+        return false;
+      }
+      _previewEntries[entry.replyId] = previous.copyWith(
+        action: action,
+        reasons: reasons,
+      );
+      notifyListeners();
+      return true;
+    }
+
+    _previewEntries[entry.replyId] = entry;
+    if (_previewEntries.length > maxPreviewEntries) {
+      _previewEntries.remove(_previewEntries.keys.first);
+    }
+    notifyListeners();
+    return true;
+  }
+
   void rememberUndo(ReplyPurifyUndoAction action) {
     _undoAction = action;
+    notifyListeners();
   }
 
   bool clearUndo([ReplyPurifyUndoAction? expected]) {
@@ -336,6 +423,7 @@ class ReplyPurifyVideoSession {
       return false;
     }
     _undoAction = null;
+    notifyListeners();
     return true;
   }
 
@@ -343,13 +431,30 @@ class ReplyPurifyVideoSession {
 
   bool isIgnored(int replyId) => _ignoredReplyIds.contains(replyId);
 
-  bool ignore(int replyId) => replyId > 0 && _ignoredReplyIds.add(replyId);
+  bool ignore(int replyId) {
+    if (replyId <= 0 || !_ignoredReplyIds.add(replyId)) return false;
+    _previewEntries.remove(replyId);
+    notifyListeners();
+    return true;
+  }
 
-  bool restore(int replyId) => _ignoredReplyIds.remove(replyId);
+  bool restore(int replyId) {
+    final changed = _ignoredReplyIds.remove(replyId);
+    if (changed) notifyListeners();
+    return changed;
+  }
 
   bool clearIgnored() {
     if (_ignoredReplyIds.isEmpty) return false;
     _ignoredReplyIds.clear();
+    notifyListeners();
+    return true;
+  }
+
+  bool clearPreview() {
+    if (_previewEntries.isEmpty) return false;
+    _previewEntries.clear();
+    notifyListeners();
     return true;
   }
 }

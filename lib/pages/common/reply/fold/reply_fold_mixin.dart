@@ -10,6 +10,10 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 mixin BaseReplyFoldMixin<R> on ReplyController<R> {
   FoldCard? foldCard;
 
+  void onPurifyBlockedReply(ReplyInfo reply, List<String> reasons) {}
+
+  bool isPurifyReplyIgnored(int replyId) => false;
+
   void getFoldCard(List<MixedCard> mixedCards) {
     if (mixedCards.isNotEmpty) {
       foldCard = mixedCards.firstWhereOrNull((e) => e.type == .FOLD)?.fold;
@@ -24,6 +28,8 @@ mixin BaseReplyFoldMixin<R> on ReplyController<R> {
         oid: oid,
         type: replyType,
         pagination: foldCard!.foldPagination,
+        onBlocked: onPurifyBlockedReply,
+        isIgnored: isPurifyReplyIgnored,
       );
       if (isClosed) return;
       if (res case Success(:final response)) {

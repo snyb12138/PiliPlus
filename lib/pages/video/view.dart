@@ -26,6 +26,7 @@ import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/danmaku/view.dart';
 import 'package:PiliPlus/pages/episode_panel/view.dart';
+import 'package:PiliPlus/pages/purify_center/view.dart';
 import 'package:PiliPlus/pages/video/ai_conclusion/view.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/local/controller.dart';
@@ -88,7 +89,10 @@ class VideoDetailPageV extends StatefulWidget {
 
 class _VideoDetailPageVState extends State<VideoDetailPageV>
     with RouteAware, RouteAwareMixin, WidgetsBindingObserver {
+  static const String _purifyTab = '__purify__';
+
   final heroTag = Get.arguments['heroTag'];
+  List<String> _tabLabels = const [];
 
   late final VideoDetailController videoDetailController;
   late final VideoReplyController _videoReplyController;
@@ -606,6 +610,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                         if (videoDetailController.showReply)
                           videoReplyPanel(isNested: true),
                         if (_shouldShowSeasonPanel) seasonPanel,
+                        if (videoDetailController.showReply) purifyPanel(),
                       ],
                     ),
                   ),
@@ -818,6 +823,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                         ),
                         if (videoDetailController.showReply) videoReplyPanel(),
                         if (_shouldShowSeasonPanel) seasonPanel,
+                        if (videoDetailController.showReply) purifyPanel(),
                       ],
                     ),
                   ),
@@ -878,6 +884,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                               if (videoDetailController.showReply)
                                 videoReplyPanel(),
                               if (_shouldShowSeasonPanel) seasonPanel,
+                              if (videoDetailController.showReply)
+                                purifyPanel(),
                             ],
                           ),
                         ),
@@ -981,6 +989,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                           ),
                         if (videoDetailController.showReply) videoReplyPanel(),
                         if (_shouldShowSeasonPanel) seasonPanel,
+                        if (videoDetailController.showReply) purifyPanel(),
                       ],
                     ),
                   ),
@@ -1057,24 +1066,35 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 children: [
                   buildTabBar(needIndicator: false),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: videoIntro(
-                            width: () {
-                              double flex = 1;
-                              if (videoDetailController.showReply) flex++;
-                              if (shouldShowSeasonPanel) flex++;
-                              return maxWidth / flex;
-                            }(),
-                            height: bottomHeight,
-                          ),
-                        ),
-                        if (videoDetailController.showReply)
-                          Expanded(child: videoReplyPanel()),
-                        if (shouldShowSeasonPanel) Expanded(child: seasonPanel),
-                      ],
+                    child: AnimatedBuilder(
+                      animation: videoDetailController.tabCtr,
+                      builder: (context, _) {
+                        final showPurify =
+                            videoDetailController.showReply &&
+                            videoDetailController.tabCtr.index ==
+                                videoDetailController.tabCtr.length - 1;
+                        if (showPurify) return purifyPanel();
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: videoIntro(
+                                width: () {
+                                  double flex = 1;
+                                  if (videoDetailController.showReply) flex++;
+                                  if (shouldShowSeasonPanel) flex++;
+                                  return maxWidth / flex;
+                                }(),
+                                height: bottomHeight,
+                              ),
+                            ),
+                            if (videoDetailController.showReply)
+                              Expanded(child: videoReplyPanel()),
+                            if (shouldShowSeasonPanel)
+                              Expanded(child: seasonPanel),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -1310,17 +1330,26 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         videoDetailController.isFileSource ? '离线视频' : introText ?? '简介',
       if (videoDetailController.showReply) '评论',
       if (_shouldShowSeasonPanel) '播放列表',
+      if (videoDetailController.showReply) _purifyTab,
     ];
     if (videoDetailController.tabCtr.length != tabs.length) {
+      final previousIndex = videoDetailController.tabCtr.index;
+      final previousLabel = previousIndex >= 0 &&
+              previousIndex < _tabLabels.length
+          ? _tabLabels[previousIndex]
+          : null;
       videoDetailController.tabCtr.dispose();
       videoDetailController.tabCtr = TabController(
         vsync: videoDetailController,
         length: tabs.length,
         initialIndex: tabs.isEmpty
             ? 0
-            : videoDetailController.tabCtr.index.clamp(0, tabs.length - 1),
+            : previousLabel != null && tabs.contains(previousLabel)
+            ? tabs.indexOf(previousLabel)
+            : previousIndex.clamp(0, tabs.length - 1),
       );
     }
+    _tabLabels = List.unmodifiable(tabs);
 
     Widget tabBar() {
       final flag = !needIndicator || tabs.length == 1;
@@ -1342,6 +1371,13 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               return;
             }
             String text = tabs[value];
+            if (text == _purifyTab) return;
+            final previousIndex = videoDetailController.tabCtr.previousIndex;
+            if (previousIndex >= 0 &&
+                previousIndex < tabs.length &&
+                tabs[previousIndex] == _purifyTab) {
+              return;
+            }
             if (videoDetailController.isFileSource ||
                 text == '简介' ||
                 text == '相关视频') {
@@ -1358,7 +1394,25 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           }
         },
         tabs: tabs.map((text) {
-          if (text == '评论') {
+          if (text == _purifyTab) {
+            return Tab(
+              child: ListenableBuilder(
+                listenable: _videoReplyController.purifySession,
+                builder: (context, _) {
+                  final count =
+                      _videoReplyController.purifySession.hiddenCount;
+                  return Tooltip(
+                    message: '净化中心${count == 0 ? '' : ' · $count 条'}',
+                    child: Badge(
+                      isLabelVisible: count > 0,
+                      label: Text(count > 99 ? '99+' : '$count'),
+                      child: const Icon(Icons.shield_outlined, size: 20),
+                    ),
+                  );
+                },
+              ),
+            );
+          } else if (text == '评论') {
             return Obx(() {
               final count = _videoReplyController.count.value;
               return Tab(
@@ -1886,6 +1940,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     key: videoReplyPanelKey,
     isNested: isNested,
     heroTag: heroTag,
+  );
+
+  Widget purifyPanel() => KeepAliveWrapper(
+    child: PurifyCenterPage(
+      showAppBar: false,
+      videoSession: _videoReplyController.purifySession,
+      onReplyReload: _videoReplyController.onRefresh,
+    ),
   );
 
   // ai总结

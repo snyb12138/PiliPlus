@@ -3,6 +3,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
+import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/reply/fold/reply_fold_mixin.dart';
 import 'package:PiliPlus/pages/common/reply/reply_controller.dart';
@@ -40,6 +41,32 @@ class VideoReplyController extends ReplyController<MainListReply>
 
   final String heroTag;
   late final videoCtr = Get.find<VideoDetailController>(tag: heroTag);
+  ReplyPurifyVideoSession? _purifySession;
+  ReplyPurifyVideoSession get purifySession =>
+      _purifySession ??= ReplyPurifyVideoSession(videoId: oid);
+
+  void _recordBlockedReply(ReplyInfo reply, List<String> reasons) {
+    purifySession.recordPreview(
+      ReplyPurifyPreviewEntry(
+        replyId: reply.id.toInt(),
+        rootId: reply.root.toInt(),
+        parentId: reply.parent.toInt(),
+        mid: reply.mid.toInt(),
+        name: reply.member.name,
+        message: reply.content.message,
+        action: ReplyPurifyPreviewAction.blocked,
+        reasons: List.unmodifiable(reasons),
+      ),
+    );
+  }
+
+  @override
+  void onPurifyBlockedReply(ReplyInfo reply, List<String> reasons) =>
+      _recordBlockedReply(reply, reasons);
+
+  @override
+  bool isPurifyReplyIgnored(int replyId) =>
+      purifySession.isIgnored(replyId);
 
   MentionItem? get mentionItem {
     if (videoCtr.isUgc) {
@@ -79,6 +106,7 @@ class VideoReplyController extends ReplyController<MainListReply>
         isVideoDetail: true,
         isNested: videoCtr.scrollKey.currentContext != null,
         upMid: upMid,
+        purifySession: purifySession,
       ),
     );
   }
@@ -91,5 +119,20 @@ class VideoReplyController extends ReplyController<MainListReply>
     mode: mode,
     cursorNext: cursorNext,
     offset: paginationReply?.nextOffset,
+    onBlocked: _recordBlockedReply,
+    isIgnored: purifySession.isIgnored,
   );
+
+  @override
+  Future<void> onRefresh() {
+    _purifySession?.clearPreview();
+    return super.onRefresh();
+  }
+
+  @override
+  void onClose() {
+    _purifySession?.dispose();
+    _purifySession = null;
+    super.onClose();
+  }
 }
