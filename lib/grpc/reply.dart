@@ -4,6 +4,7 @@ import 'package:PiliPlus/grpc/bilibili/pagination.pb.dart';
 import 'package:PiliPlus/grpc/grpc_req.dart';
 import 'package:PiliPlus/grpc/url.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
@@ -23,6 +24,8 @@ abstract final class ReplyGrpc {
     caseSensitive: false,
   );
   static bool enableFilter = replyRegExp.pattern.isNotEmpty;
+  static bool replyRegexSessionDisabled = false;
+  static String? replyRegexSessionDisabledReason;
   static ReplyPurifyConfig replyPurifyConfig = Pref.replyPurifyConfig;
   static final ReplyAiMentionTracker _aiMentionTracker =
       ReplyAiMentionTracker();
@@ -84,10 +87,49 @@ abstract final class ReplyGrpc {
 
   static Future<void> setReplyKeywordPattern(String pattern) async {
     final value = pattern.trim();
-    final regexp = RegExp(value, caseSensitive: false);
-    replyRegExp = regexp;
+    if (value.isNotEmpty) {
+      final safety = PurifyRegexSafety.validate(value);
+      if (!safety.ok) {
+        throw FormatException(safety.reason ?? '正则表达式不安全');
+      }
+    }
+    replyRegExp = RegExp(value, caseSensitive: false);
     enableFilter = value.isNotEmpty;
+    replyRegexSessionDisabled = false;
+    replyRegexSessionDisabledReason = null;
     await GStorage.setting.put(SettingBoxKey.banWordForReply, value);
+  }
+
+  static bool restoreReplyRegexForSession() {
+    if (!replyRegexSessionDisabled) return false;
+    replyRegexSessionDisabled = false;
+    replyRegexSessionDisabledReason = null;
+    return true;
+  }
+
+  static bool _matchesReplyKeyword(String message) {
+    if (!enableFilter ||
+        replyRegexSessionDisabled ||
+        message.length > PurifyRegexSafety.maxInputLength) {
+      return false;
+    }
+    final stopwatch = Stopwatch()..start();
+    try {
+      final hit = replyRegExp.hasMatch(message);
+      stopwatch.stop();
+      if (stopwatch.elapsedMilliseconds >
+          PurifyRegexSafety.slowMatchMilliseconds) {
+        replyRegexSessionDisabled = true;
+        replyRegexSessionDisabledReason =
+            '单次匹配耗时 ${stopwatch.elapsedMilliseconds}ms';
+      }
+      return hit;
+    } catch (error) {
+      stopwatch.stop();
+      replyRegexSessionDisabled = true;
+      replyRegexSessionDisabledReason = '运行失败：$error';
+      return false;
+    }
   }
 
   static Map<int, int> mentionSummaryForUser(int mid) =>
@@ -197,7 +239,7 @@ abstract final class ReplyGrpc {
         GlobalData().blackMids.contains(mid) ||
         _blockReplyAtCount(reply) ||
         (antiGoodsReply && _needRemoveGoodGrpc(reply)) ||
-        (enableFilter && replyRegExp.hasMatch(reply.content.message));
+        _matchesReplyKeyword(reply.content.message);
   }
 
   static Future<LoadingState<MainListReply>> mainList({
