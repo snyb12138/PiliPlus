@@ -116,25 +116,27 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('疑似 AI 评论检测强度'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final level in const [
-              ReplyAiFilterLevel.conservative,
-              ReplyAiFilterLevel.balanced,
-            ])
-              RadioListTile<ReplyAiFilterLevel>(
-                value: level,
-                groupValue: _config.aiFilterLevel,
-                title: Text(level.label),
-                subtitle: Text(
-                  level == ReplyAiFilterLevel.conservative
-                      ? '明确模型自述，或高置信度异常 @ 组合'
-                      : '必须先命中异常重复 @；文本和昵称只用于辅助加分',
+        content: RadioGroup<ReplyAiFilterLevel>(
+          groupValue: _config.aiFilterLevel,
+          onChanged: (value) => Get.back(result: value),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final level in const [
+                ReplyAiFilterLevel.conservative,
+                ReplyAiFilterLevel.balanced,
+              ])
+                RadioListTile<ReplyAiFilterLevel>(
+                  value: level,
+                  title: Text(level.label),
+                  subtitle: Text(
+                    level == ReplyAiFilterLevel.conservative
+                        ? '明确模型自述，或高置信度异常 @ 组合'
+                        : '必须先命中异常重复 @；文本和昵称只用于辅助加分',
+                  ),
                 ),
-                onChanged: (value) => Get.back(result: value),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
