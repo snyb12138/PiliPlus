@@ -55,6 +55,13 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
     widget.onChanged();
   }
 
+  void _restoreReplyRegex() {
+    if (!ReplyGrpc.restoreReplyRegexForSession()) return;
+    setState(() {});
+    widget.onChanged();
+    SmartDialog.showToast('评论正则已在当前进程重新启用');
+  }
+
   Future<void> _editKeywords() async {
     final previousPattern = ReplyGrpc.replyRegExp.pattern;
     final controller = TextEditingController(
@@ -210,6 +217,12 @@ class _ReplyPurifyHubCardState extends State<ReplyPurifyHubCard> {
                   label: const Text('纯 @ 折叠'),
                   onSelected: _setPureMentionFold,
                 ),
+                if (ReplyGrpc.replyRegexSessionDisabled)
+                  ActionChip(
+                    avatar: const Icon(Icons.warning_amber_outlined, size: 16),
+                    label: const Text('慢正则已停用·恢复'),
+                    onPressed: _restoreReplyRegex,
+                  ),
                 if (widget.ignoredForVideoCount > 0)
                   ActionChip(
                     avatar: const Icon(Icons.restore, size: 16),
