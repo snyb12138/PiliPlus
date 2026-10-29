@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_purify.dart';
+import 'package:PiliPlus/utils/config_archive.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -184,20 +185,15 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
       context,
       title: '评论净化配置',
       localFileName: () => 'reply_purify',
-      onExport: () => Utils.jsonEncoder.convert({
-        ..._config.toStorage(),
-        'replyKeywordPattern': ReplyGrpc.replyRegExp.pattern,
-      }),
+      onExport: () =>
+          Utils.jsonEncoder.convert(ConfigArchive.exportPurifyConfig()),
       onImport: (json) async {
-        if (json['mutedUsers'] is! Iterable) {
+        final root = PurifyConfigV4.sanitizeMap(json);
+        final reply = PurifyConfigV4.replySection(root);
+        if (reply['mutedUsers'] is! Iterable) {
           throw const FormatException('缺少 mutedUsers 列表');
         }
-        if (json['replyKeywordPattern'] case final String pattern) {
-          await ReplyGrpc.setReplyKeywordPattern(pattern);
-        }
-        await ReplyGrpc.replaceReplyPurifyConfig(
-          ReplyPurifyConfig.fromStorage(json),
-        );
+        await ConfigArchive.importPurifyConfig(root);
         if (mounted) setState(() {});
       },
     );
