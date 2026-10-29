@@ -85,4 +85,51 @@ void main() {
     expect(restored.contains(123), isTrue);
     expect(restored.trustsAiUser(456), isFalse);
   });
+
+  test('v4 browser extension fields survive a safe round trip', () {
+    final source = <String, dynamic>{
+      'schema': PurifyConfigV4.schema,
+      'version': PurifyConfigV4.version,
+      'mutedUsers': const <dynamic>[],
+      'browserExtension': {
+        'version': 6,
+        'enabled': true,
+        'futureFlag': {
+          'keep': true,
+          '__proto__': {'polluted': true},
+        },
+      },
+    };
+
+    final sanitized = PurifyConfigV4.sanitizeMap(source);
+    final browser = sanitized['browserExtension'] as Map<String, dynamic>;
+    final future = browser['futureFlag'] as Map<String, dynamic>;
+
+    expect(sanitized['schema'], 'piliplus-purify');
+    expect(sanitized['version'], 4);
+    expect(browser['version'], 6);
+    expect(future['keep'], isTrue);
+    expect(future.containsKey('__proto__'), isFalse);
+  });
+
+  test('v4 codec reads legacy nested and flat reply sections', () {
+    final nested = PurifyConfigV4.replySection({
+      'version': 2,
+      'replyPurify': {
+        'mutedUsers': [
+          {'mid': 123},
+        ],
+      },
+    });
+    final flat = PurifyConfigV4.replySection({
+      'version': 4,
+      'mutedUsers': [
+        {'mid': 456},
+      ],
+    });
+
+    expect((nested['mutedUsers'] as List).single['mid'], 123);
+    expect((flat['mutedUsers'] as List).single['mid'], 456);
+  });
+
 }

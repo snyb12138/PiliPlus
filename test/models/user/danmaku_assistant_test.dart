@@ -1,4 +1,5 @@
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -75,4 +76,31 @@ void main() {
     expect(restored.blockPeopleCounts, isFalse);
     expect(restored.blockShortCheckIns, isTrue);
   });
+
+  test('regex safety rejects common catastrophic structures', () {
+    expect(PurifyRegexSafety.validate(r'^正常\d+$').ok, isTrue);
+    expect(PurifyRegexSafety.validate('(').ok, isFalse);
+    expect(PurifyRegexSafety.validate(r'^(a+)+$').ok, isFalse);
+    expect(PurifyRegexSafety.validate(r'(a)\1').ok, isFalse);
+    expect(
+      PurifyRegexSafety.validate(List.filled(257, 'a').join()).ok,
+      isFalse,
+    );
+  });
+
+  test('unsafe imported regex rules are isolated independently', () {
+    final filter = RuleFilter.fromRawPatterns(
+      const ['关键词'],
+      const [r'^正常\d+$', r'^(a+)+$', '('],
+      const {'0a6216d9'},
+    );
+
+    expect(filter.dmFilterString, const ['关键词']);
+    expect(filter.dmRegExp.map((item) => item.pattern), [r'^正常\d+$']);
+    expect(filter.dmUid, const {'0a6216d9'});
+    expect(filter.rejectedRegexRules.length, 2);
+    expect(filter.sessionDisabledRegexRules, isEmpty);
+    expect(filter.restoreSessionDisabledRegex(), isFalse);
+  });
+
 }

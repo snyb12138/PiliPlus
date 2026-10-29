@@ -7,12 +7,9 @@ class RuleFilterAdapter extends TypeAdapter<RuleFilter> {
 
   @override
   RuleFilter read(BinaryReader reader) {
-    return RuleFilter(
+    return RuleFilter.fromRawPatterns(
       reader.readStringList(),
-      reader
-          .readStringList()
-          .map((i) => RegExp(i, caseSensitive: false))
-          .toList(),
+      reader.readStringList(),
       reader.readStringList().toSet(),
     );
   }
