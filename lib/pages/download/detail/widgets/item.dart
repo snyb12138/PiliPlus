@@ -101,12 +101,13 @@ class DetailItem extends StatelessWidget {
                 DialogOption(
                   onPressed: () async {
                     Get.back();
-                    final res = await downloadService.downloadDanmaku(
-                      entry: entry,
-                      isUpdate: true,
-                    );
-                    if (res) {
-                      SmartDialog.showToast('更新成功');
+                    final res = await downloadService.updateDanmaku(entry);
+                    if (res != null) {
+                      SmartDialog.showToast(
+                        res.changed
+                            ? '更新成功：${res.previousCount} → ${res.currentCount} 条'
+                            : '更新成功：已同步 ${res.currentCount} 条弹幕',
+                      );
                     } else {
                       SmartDialog.showToast('更新失败');
                     }

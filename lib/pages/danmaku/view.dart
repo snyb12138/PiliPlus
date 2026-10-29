@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
@@ -6,6 +7,7 @@ import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
+import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/danmaku_utils.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:get/get.dart';
@@ -41,6 +43,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   late final PlDanmakuController _plDanmakuController;
   DanmakuController<DanmakuExtra>? _controller;
+  StreamSubscription<DanmakuUpdateEvent>? _danmakuUpdateSub;
   int latestAddedPosition = -1;
 
   @override
@@ -54,6 +57,14 @@ class _PlDanmakuState extends State<PlDanmaku> {
     playerController
       ..beginDanmakuAssistantSession(widget.cid)
       ..addDanmakuFilterReloader(_reloadDanmakuFilters);
+    if (widget.isFileSource && Get.isRegistered<DownloadService>()) {
+      _danmakuUpdateSub = Get.find<DownloadService>()
+          .danmakuUpdates
+          .where((event) => event.cid == widget.cid)
+          .listen((_) {
+            if (mounted) _reloadDanmakuFilters();
+          });
+    }
     if (playerController.enableShowDanmaku.value) {
       if (widget.isFileSource) {
         _plDanmakuController.initFileDmIfNeeded();
@@ -169,6 +180,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   @override
   void dispose() {
+    _danmakuUpdateSub?.cancel();
     playerController
       ..removePositionListener(videoPositionListen)
       ..removeStatusLister(playerListener)

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
 import 'dart:io' show Directory, File;
 
+import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart'
+    show DmSegMobileReply;
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/download.dart';
 import 'package:PiliPlus/http/init.dart';
@@ -33,12 +35,32 @@ import 'package:synchronized/synchronized.dart';
 
 // ref https://github.com/10miaomiao/bilimiao2/blob/master/bilimiao-download/src/main/java/cn/a10miaomiao/bilimiao/download/DownloadService.kt
 
+class DanmakuUpdateEvent {
+  const DanmakuUpdateEvent({
+    required this.cid,
+    required this.previousCount,
+    required this.currentCount,
+  });
+
+  final int cid;
+  final int previousCount;
+  final int currentCount;
+
+  bool get changed => previousCount != currentCount;
+}
+
 class DownloadService extends GetxService {
   static const _entryFile = 'entry.json';
   static const _indexFile = 'index.json';
   static const _maxDanmakuConcurrency = 4;
+  static const _maxDanmakuAttempts = 3;
 
   final _lock = Lock();
+  final _danmakuUpdatedController =
+      StreamController<DanmakuUpdateEvent>.broadcast();
+
+  Stream<DanmakuUpdateEvent> get danmakuUpdates =>
+      _danmakuUpdatedController.stream;
 
   final flagNotifier = SetNotifier();
   final waitDownloadQueue = RxList<BiliDownloadEntryInfo>();
@@ -64,6 +86,12 @@ class DownloadService extends GetxService {
   void onInit() {
     super.onInit();
     initDownloadList();
+  }
+
+  @override
+  void onClose() {
+    _danmakuUpdatedController.close();
+    super.onClose();
   }
 
   void initDownloadList() {
@@ -309,12 +337,86 @@ class DownloadService extends GetxService {
     });
   }
 
-  Future<bool> downloadDanmaku({
+  Future<DmSegMobileReply> _requestDanmakuSegment({
+    required int cid,
+    required int segmentIndex,
+  }) async {
+    String? lastError;
+    for (var attempt = 1; attempt <= _maxDanmakuAttempts; attempt++) {
+      final res = await DmGrpc.dmSegMobile(
+        cid: cid,
+        segmentIndex: segmentIndex,
+      );
+      if (res case Success(:final response)) return response;
+      lastError = res.toString();
+      if (attempt < _maxDanmakuAttempts) {
+        await Future<void>.delayed(Duration(milliseconds: 250 * attempt));
+      }
+    }
+    throw StateError(
+      'Danmaku segment $segmentIndex failed after '
+      '$_maxDanmakuAttempts attempts${lastError?.isNotEmpty == true ? ': $lastError' : ''}',
+    );
+  }
+
+  Future<int> _readDanmakuCount(File file) async {
+    if (!file.existsSync()) return 0;
+    try {
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return 0;
+      return DmSegMobileReply.fromBuffer(bytes).elems.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _replaceDanmakuFile(
+    File target,
+    List<int> bytes,
+  ) async {
+    final temp = File('${target.path}.updating');
+    final backup = File('${target.path}.backup');
+    if (temp.existsSync()) await temp.delete();
+    await temp.writeAsBytes(bytes, flush: true);
+
+    // Validate the complete protobuf before touching the known-good file.
+    DmSegMobileReply.fromBuffer(await temp.readAsBytes());
+
+    var oldMoved = false;
+    try {
+      if (backup.existsSync()) await backup.delete();
+      if (target.existsSync()) {
+        await target.rename(backup.path);
+        oldMoved = true;
+      }
+      try {
+        await temp.rename(target.path);
+      } catch (_) {
+        if (oldMoved && backup.existsSync() && !target.existsSync()) {
+          await backup.rename(target.path);
+        }
+        rethrow;
+      }
+      if (backup.existsSync()) {
+        try {
+          await backup.delete();
+        } catch (_) {}
+      }
+    } finally {
+      if (temp.existsSync()) {
+        try {
+          await temp.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<DanmakuUpdateEvent?> _downloadDanmaku({
     required BiliDownloadEntryInfo entry,
     bool isUpdate = false,
   }) async {
     final cid = entry.pageData?.cid ?? entry.source?.cid;
-    if (cid == null) return false;
+    if (cid == null) return null;
     final danmakuFile = File(
       path.join(entry.entryDirPath, PathUtils.danmakuName),
     );
@@ -328,34 +430,61 @@ class DownloadService extends GetxService {
           throw StateError('Invalid danmaku segment count: $seg');
         }
 
-        final danmaku = (await DmGrpc.dmSegMobile(
+        final previousCount = await _readDanmakuCount(danmakuFile);
+        final danmaku = await _requestDanmakuSegment(
           cid: cid,
           segmentIndex: 1,
-        )).data;
+        );
         for (var start = 2; start <= seg; start += _maxDanmakuConcurrency) {
           final end = start + _maxDanmakuConcurrency - 1;
           final responses = await Future.wait([
             for (var index = start; index <= seg && index <= end; index++)
-              DmGrpc.dmSegMobile(cid: cid, segmentIndex: index),
+              _requestDanmakuSegment(cid: cid, segmentIndex: index),
           ]);
           for (final response in responses) {
-            danmaku.elems.addAll(response.data.elems);
+            danmaku.elems.addAll(response.elems);
           }
           responses.clear();
         }
-        await danmakuFile.writeAsBytes(danmaku.writeToBuffer());
+        await _replaceDanmakuFile(danmakuFile, danmaku.writeToBuffer());
 
-        return true;
+        final event = DanmakuUpdateEvent(
+          cid: cid,
+          previousCount: previousCount,
+          currentCount: danmaku.elems.length,
+        );
+        if (isUpdate) _danmakuUpdatedController.add(event);
+        return event;
       } catch (e) {
         if (!isUpdate) {
           _updateCurStatus(DownloadStatus.failDanmaku);
         }
-        if (kDebugMode) SmartDialog.showToast(e.toString());
-        return false;
+        if (kDebugMode) debugPrint('download danmaku failed: $e');
+        return null;
       }
     }
-    return true;
+    final count = await _readDanmakuCount(danmakuFile);
+    return DanmakuUpdateEvent(
+      cid: cid,
+      previousCount: count,
+      currentCount: count,
+    );
   }
+
+  Future<bool> downloadDanmaku({
+    required BiliDownloadEntryInfo entry,
+    bool isUpdate = false,
+  }) async {
+    final result = await _downloadDanmaku(
+      entry: entry,
+      isUpdate: isUpdate,
+    );
+    return result != null;
+  }
+
+  Future<DanmakuUpdateEvent?> updateDanmaku(
+    BiliDownloadEntryInfo entry,
+  ) => _downloadDanmaku(entry: entry, isUpdate: true);
 
   Future<bool> _downloadCover({
     required BiliDownloadEntryInfo entry,
