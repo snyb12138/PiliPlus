@@ -21,6 +21,12 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     if (mounted) setState(() {});
   }
 
+  void _restoreDanmakuRegex() {
+    if (Pref.danmakuFilterRule.restoreSessionDisabledRegex() && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final danmaku = Pref.danmakuAssistantConfig;
@@ -34,6 +40,10 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
     final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;
     final videoPurify = RecommendFilter.videoPurifyConfig;
+    final traditionalDanmaku = Pref.danmakuFilterRule;
+    final slowRegexCount =
+        traditionalDanmaku.sessionDisabledRegexRules.length;
+    final rejectedRegexCount = traditionalDanmaku.rejectedRegexRules.length;
     final padding = MediaQuery.viewPaddingOf(context);
 
     return SimpleScaffold(
@@ -102,6 +112,25 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
             ),
           ),
           const SizedBox(height: 8),
+          if (slowRegexCount > 0 || rejectedRegexCount > 0)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.warning_amber_outlined),
+                title: const Text('正则安全状态'),
+                subtitle: Text(
+                  '本进程停用慢规则 $slowRegexCount 条；'
+                  '拒绝高风险规则 $rejectedRegexCount 条',
+                ),
+                trailing: slowRegexCount == 0
+                    ? null
+                    : TextButton(
+                        onPressed: _restoreDanmakuRegex,
+                        child: const Text('重新启用'),
+                      ),
+              ),
+            ),
+          if (slowRegexCount > 0 || rejectedRegexCount > 0)
+            const SizedBox(height: 8),
           const Card(
             child: ListTile(
               leading: Icon(Icons.tune_outlined),
