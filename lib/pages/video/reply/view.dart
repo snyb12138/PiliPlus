@@ -18,6 +18,7 @@ import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -81,6 +82,41 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     if (_purifySession.clearIgnored() && mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> _recordPurifyAction(ReplyPurifyUndoAction action) async {
+    _purifySession.rememberUndo(action);
+    if (mounted) setState(() {});
+    if (action.requiresReplyReload) {
+      await controller.onRefresh();
+    }
+  }
+
+  Future<void> _undoPurifyAction() async {
+    final action = _purifySession.undoAction;
+    if (action == null) return;
+
+    switch (action.type) {
+      case ReplyPurifyUndoActionType.muteUser:
+        await ReplyGrpc.unmuteReplyUser(action.mid);
+        break;
+      case ReplyPurifyUndoActionType.markUser:
+        await ReplyGrpc.unmarkReplyUser(action.mid);
+        break;
+      case ReplyPurifyUndoActionType.unmarkUser:
+        await ReplyGrpc.markReplyUser(action.mid, name: action.name);
+        break;
+      case ReplyPurifyUndoActionType.keywordPattern:
+        await ReplyGrpc.setReplyKeywordPattern(action.previousKeywordPattern);
+        break;
+    }
+
+    _purifySession.clearUndo(action);
+    if (mounted) setState(() {});
+    if (action.requiresReplyReload) {
+      await controller.onRefresh();
+    }
+    SmartDialog.showToast('已撤销：${action.label}');
   }
 
   @override
@@ -153,6 +189,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   child: ReplyPurifyHubCard(
                     ignoredForVideoCount: _purifySession.ignoredCount,
                     onRestoreIgnoredForVideo: _restoreIgnoredForVideo,
+                    undoAction: _purifySession.undoAction,
+                    onUndoAction: _undoPurifyAction,
+                    onPurifyAction: _recordPurifyAction,
                     onChanged: () {
                       if (mounted) setState(() {});
                     },
@@ -240,6 +279,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   onPurifySessionChanged: () {
                     if (mounted) setState(() {});
                   },
+                  onPurifyAction: _recordPurifyAction,
                 );
                 if (item.id == controller.targetRootRpId) {
                   return controller.colorAnimWrapper(

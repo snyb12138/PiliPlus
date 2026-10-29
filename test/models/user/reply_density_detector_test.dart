@@ -152,6 +152,46 @@ void main() {
       expect(session.clearIgnored(), isFalse);
       expect(session.ignoredReplyIds, isEmpty);
     });
+
+
+    test('only the latest recoverable action is retained per video', () {
+      final session = ReplyPurifyVideoSession(videoId: 100);
+      const first = ReplyPurifyUndoAction.muteUser(
+        mid: 42,
+        name: '测试账号',
+      );
+      const second = ReplyPurifyUndoAction.keywordPattern(
+        previousPattern: '旧规则',
+      );
+
+      session.rememberUndo(first);
+      expect(session.undoAction, same(first));
+      expect(first.requiresReplyReload, isTrue);
+      expect(first.label, '屏蔽 @测试账号');
+
+      session.rememberUndo(second);
+      expect(session.undoAction, same(second));
+      expect(session.clearUndo(first), isFalse);
+      expect(session.clearUndo(second), isTrue);
+      expect(session.undoAction, isNull);
+      expect(session.clearUndo(), isFalse);
+    });
+
+    test('mark actions remain local and do not require a reply reload', () {
+      const added = ReplyPurifyUndoAction.markUser(
+        mid: 42,
+        name: '测试账号',
+      );
+      const removed = ReplyPurifyUndoAction.unmarkUser(
+        mid: 42,
+        name: '测试账号',
+      );
+
+      expect(added.requiresReplyReload, isFalse);
+      expect(removed.requiresReplyReload, isFalse);
+      expect(added.label, '标记 @测试账号');
+      expect(removed.label, '取消标记 @测试账号');
+    });
   });
 
 }

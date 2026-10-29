@@ -203,11 +203,13 @@ class _ReplyPurifyQuickActions extends StatefulWidget {
   const _ReplyPurifyQuickActions({
     required this.reply,
     this.onBlocked,
+    this.onPurifyAction,
     this.compact = false,
   });
 
   final ReplyInfo reply;
   final VoidCallback? onBlocked;
+  final Future<void> Function(ReplyPurifyUndoAction action)? onPurifyAction;
   final bool compact;
 
   @override
@@ -224,8 +226,18 @@ class _ReplyPurifyQuickActionsState
     );
     if (!mounted) return;
     if (added) {
-      widget.onBlocked?.call();
-      SmartDialog.showToast('已屏蔽该账号的评论');
+      if (widget.onPurifyAction case final onPurifyAction?) {
+        await onPurifyAction(
+          ReplyPurifyUndoAction.muteUser(
+            mid: widget.reply.mid.toInt(),
+            name: widget.reply.member.name,
+          ),
+        );
+      } else {
+        widget.onBlocked?.call();
+      }
+      if (!mounted) return;
+      SmartDialog.showToast('已屏蔽该账号的评论，可在屏蔽中心撤销');
     } else {
       SmartDialog.showToast('该账号已在评论屏蔽列表中');
     }
@@ -233,15 +245,24 @@ class _ReplyPurifyQuickActionsState
 
   Future<void> _toggleMark() async {
     final mid = widget.reply.mid.toInt();
+    final name = widget.reply.member.name;
     final marked = ReplyGrpc.replyPurifyConfig.isMarked(mid);
-    if (marked) {
-      await ReplyGrpc.unmarkReplyUser(mid);
-    } else {
-      await ReplyGrpc.markReplyUser(mid, name: widget.reply.member.name);
+    final changed = marked
+        ? await ReplyGrpc.unmarkReplyUser(mid)
+        : await ReplyGrpc.markReplyUser(mid, name: name);
+    if (!changed || !mounted) return;
+    if (widget.onPurifyAction case final onPurifyAction?) {
+      await onPurifyAction(
+        marked
+            ? ReplyPurifyUndoAction.unmarkUser(mid: mid, name: name)
+            : ReplyPurifyUndoAction.markUser(mid: mid, name: name),
+      );
     }
     if (!mounted) return;
     setState(() {});
-    SmartDialog.showToast(marked ? '已取消标记' : '已加入标记库');
+    SmartDialog.showToast(
+      marked ? '已取消标记，可在屏蔽中心撤销' : '已加入标记库，可在屏蔽中心撤销',
+    );
   }
 
   @override
@@ -298,6 +319,7 @@ class ReplyItemGrpc extends StatelessWidget {
     this.jumpToDialogue,
     this.purifySession,
     this.onPurifySessionChanged,
+    this.onPurifyAction,
   });
   final ReplyInfo replyItem;
   final int replyLevel;
@@ -314,6 +336,7 @@ class ReplyItemGrpc extends StatelessWidget {
   final VoidCallback? jumpToDialogue;
   final ReplyPurifyVideoSession? purifySession;
   final VoidCallback? onPurifySessionChanged;
+  final Future<void> Function(ReplyPurifyUndoAction action)? onPurifyAction;
 
   void _ignorePurifyReply(ReplyInfo reply) {
     if (purifySession?.ignore(reply.id.toInt()) ?? false) {
@@ -474,6 +497,7 @@ class ReplyItemGrpc extends StatelessWidget {
                     _ReplyPurifyQuickActions(
                       reply: replyItem,
                       onBlocked: () => onDelete?.call(replyItem, null),
+                      onPurifyAction: onPurifyAction,
                     ),
                   ],
                 ),
@@ -900,6 +924,7 @@ class ReplyItemGrpc extends StatelessWidget {
                               compact: true,
                               onBlocked: () =>
                                   onDelete?.call(replyItem, index),
+                              onPurifyAction: onPurifyAction,
                             ),
                           ),
                           if (childReply.mid == upMid) ...[

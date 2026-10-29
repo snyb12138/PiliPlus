@@ -254,13 +254,90 @@ abstract final class ReplyDensityDetector {
 }
 
 
+enum ReplyPurifyUndoActionType {
+  muteUser,
+  markUser,
+  unmarkUser,
+  keywordPattern,
+}
+
+class ReplyPurifyUndoAction {
+  const ReplyPurifyUndoAction._({
+    required this.type,
+    this.mid = 0,
+    this.name = '',
+    this.previousKeywordPattern = '',
+  });
+
+  const ReplyPurifyUndoAction.muteUser({
+    required int mid,
+    required String name,
+  }) : this._(type: ReplyPurifyUndoActionType.muteUser, mid: mid, name: name);
+
+  const ReplyPurifyUndoAction.markUser({
+    required int mid,
+    required String name,
+  }) : this._(type: ReplyPurifyUndoActionType.markUser, mid: mid, name: name);
+
+  const ReplyPurifyUndoAction.unmarkUser({
+    required int mid,
+    required String name,
+  }) : this._(
+         type: ReplyPurifyUndoActionType.unmarkUser,
+         mid: mid,
+         name: name,
+       );
+
+  const ReplyPurifyUndoAction.keywordPattern({
+    required String previousPattern,
+  }) : this._(
+         type: ReplyPurifyUndoActionType.keywordPattern,
+         previousKeywordPattern: previousPattern,
+       );
+
+  final ReplyPurifyUndoActionType type;
+  final int mid;
+  final String name;
+  final String previousKeywordPattern;
+
+  bool get requiresReplyReload =>
+      type == ReplyPurifyUndoActionType.muteUser ||
+      type == ReplyPurifyUndoActionType.keywordPattern;
+
+  String get label {
+    final user = name.isEmpty ? mid.toString() : name;
+    return switch (type) {
+      ReplyPurifyUndoActionType.muteUser => '屏蔽 @$user',
+      ReplyPurifyUndoActionType.markUser => '标记 @$user',
+      ReplyPurifyUndoActionType.unmarkUser => '取消标记 @$user',
+      ReplyPurifyUndoActionType.keywordPattern => '关键词修改',
+    };
+  }
+}
+
 class ReplyPurifyVideoSession {
   ReplyPurifyVideoSession({required this.videoId});
 
   final int videoId;
   final Set<int> _ignoredReplyIds = <int>{};
+  ReplyPurifyUndoAction? _undoAction;
 
   Set<int> get ignoredReplyIds => Set.unmodifiable(_ignoredReplyIds);
+
+  ReplyPurifyUndoAction? get undoAction => _undoAction;
+
+  void rememberUndo(ReplyPurifyUndoAction action) {
+    _undoAction = action;
+  }
+
+  bool clearUndo([ReplyPurifyUndoAction? expected]) {
+    if (_undoAction == null ||
+        (expected != null && !identical(_undoAction, expected))) {
+      return false;
+    }
+    _undoAction = null;
+    return true;
+  }
 
   int get ignoredCount => _ignoredReplyIds.length;
 
