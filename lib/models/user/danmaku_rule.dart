@@ -71,6 +71,17 @@ class RuleFilter {
         count ?? dmFilterString.length + dmRegExp.length + dmUid.length;
   }
 
+  RuleFilter.fromRawPatterns(
+    this.dmFilterString,
+    Iterable<String> patterns,
+    this.dmUid,
+  ) {
+    for (final pattern in patterns) {
+      _addRegexPattern(pattern);
+    }
+    count = dmFilterString.length + dmRegExp.length + dmUid.length;
+  }
+
   RuleFilter.fromRuleTypeEntries(List<List<SimpleRule>> rules) {
     dmFilterString = rules[0].map((e) => e.filter).toList();
     for (final rule in rules[1]) {
