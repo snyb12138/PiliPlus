@@ -1,5 +1,59 @@
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 
+abstract final class PurifyConfigV4 {
+  static const String schema = 'piliplus-purify';
+  static const int version = 4;
+  static const Set<String> _forbiddenKeys = {
+    '__proto__',
+    'constructor',
+    'prototype',
+  };
+
+  static Map<String, dynamic> replySection(Map<String, dynamic> root) {
+    final nested = root['replyPurify'];
+    return nested is Map
+        ? sanitizeMap(nested)
+        : Map<String, dynamic>.of(root);
+  }
+
+  static Map<String, dynamic> sanitizeMap(dynamic raw) {
+    if (raw is! Map) return <String, dynamic>{};
+    final result = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key is! String || _forbiddenKeys.contains(key)) continue;
+      final value = _sanitize(entry.value, 0);
+      if (value != null) result[key] = value;
+    }
+    return result;
+  }
+
+  static dynamic _sanitize(dynamic value, int depth) {
+    if (depth >= 16) return null;
+    if (value == null || value is String || value is bool || value is int) {
+      return value;
+    }
+    if (value is double) return value.isFinite ? value : null;
+    if (value is Iterable) {
+      return value
+          .map((item) => _sanitize(item, depth + 1))
+          .where((item) => item != null)
+          .toList(growable: false);
+    }
+    if (value is Map) {
+      final result = <String, dynamic>{};
+      for (final entry in value.entries) {
+        final key = entry.key;
+        if (key is! String || _forbiddenKeys.contains(key)) continue;
+        final item = _sanitize(entry.value, depth + 1);
+        if (item != null) result[key] = item;
+      }
+      return result;
+    }
+    return null;
+  }
+}
+
 enum ReplyPurifyCenterMode {
   expanded,
   collapsed,
