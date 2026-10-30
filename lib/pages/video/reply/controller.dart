@@ -2,7 +2,6 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show MainListReply, ReplyInfo;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/reply/fold/reply_fold_mixin.dart';
@@ -25,25 +24,26 @@ class VideoReplyController extends ReplyController<MainListReply>
         BaseReplyFoldMixin<MainListReply>,
         ReplyFoldMixin {
   VideoReplyController({
-    required this.aid,
-    required this.videoType,
     required this.heroTag,
   });
-  int aid;
-  final VideoType videoType;
-  late final isPugv = videoType == VideoType.pugv;
+  late final isPugv = videoCtr.videoType == .pugv;
 
   @override
-  int get oid => isPugv ? videoCtr.epId! : aid;
+  int get oid => isPugv ? videoCtr.epId! : videoCtr.aid;
 
   @override
-  int get replyType => videoType.replyType;
+  int get replyType => videoCtr.videoType.replyType;
 
   final String heroTag;
   late final videoCtr = Get.find<VideoDetailController>(tag: heroTag);
-  ReplyPurifyVideoSession? _purifySession;
-  ReplyPurifyVideoSession get purifySession =>
-      _purifySession ??= ReplyPurifyVideoSession(videoId: oid);
+  final Map<int, ReplyPurifyVideoSession> _purifySessions = {};
+  ReplyPurifyVideoSession get purifySession {
+    final videoId = oid;
+    return _purifySessions.putIfAbsent(
+      videoId,
+      () => ReplyPurifyVideoSession(videoId: videoId),
+    );
+  }
 
   void _recordBlockedReply(ReplyInfo reply, List<String> reasons) {
     purifySession.recordPreview(
@@ -80,7 +80,7 @@ class VideoReplyController extends ReplyController<MainListReply>
   }
 
   @override
-  dynamic get sourceId => IdUtils.av2bv(aid);
+  dynamic get sourceId => IdUtils.av2bv(videoCtr.aid);
 
   @override
   void onAnimRootReply(ReplyInfo rootReply) {
@@ -125,14 +125,16 @@ class VideoReplyController extends ReplyController<MainListReply>
 
   @override
   Future<void> onRefresh() {
-    _purifySession?.clearPreview();
+    _purifySessions[oid]?.clearPreview();
     return super.onRefresh();
   }
 
   @override
   void onClose() {
-    _purifySession?.dispose();
-    _purifySession = null;
+    for (final session in _purifySessions.values) {
+      session.dispose();
+    }
+    _purifySessions.clear();
     super.onClose();
   }
 }
