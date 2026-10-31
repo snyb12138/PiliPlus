@@ -18,6 +18,7 @@ import 'package:PiliPlus/common/widgets/simple_app_bar.dart';
 import 'package:PiliPlus/common/widgets/sliver/video_header.dart';
 import 'package:PiliPlus/common/widgets/svg/play_icon.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
+import 'package:PiliPlus/models/common/pgc_episode_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
@@ -1920,7 +1921,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     );
   }
 
-  void showEpisodes({EpisodeType? type}) {
+  void showEpisodes({EpisodeType? type, PgcEpisodeType? episodeType}) {
     if (type == null) {
       videoDetailController.showMediaListPanel(context);
       return;
@@ -1928,9 +1929,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     final isModal = isFullScreen || videoDetailController.showVideoSheet;
     final child = EpisodePanel(
       type: type,
+      episodeType: episodeType,
       isSidePanel: false,
       enableSlide: !isModal,
-      onReverse: () => {Get.back(), onReversePlay(isSeason: type == .season)},
+      onReverse: () => onReversePlay(isSeason: type == .season),
       introController: introController,
     );
     if (isModal) {
@@ -1950,6 +1952,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     final videoDetail = ugcIntroController.videoDetail.value;
+
+    void updateIndex() {
+      ugcIntroController.updateIndex(data: videoDetail, force: true);
+    }
+
     if (isSeason) {
       if (!videoDetail.hasSeason) return;
       // reverse season
@@ -1961,14 +1968,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
       if (!videoDetailController.plPlayerController.reverseFromFirst) {
         // keep current episode
-        ugcIntroController.updateIndex(force: true);
+        updateIndex();
       } else {
         // switch to first episode
         final episode = section.episodes!.first;
         if (episode.cid != videoDetailController.cid.value) {
           ugcIntroController.onChangeEpisode(episode);
         } else {
-          ugcIntroController.updateIndex(force: true);
+          updateIndex();
         }
       }
     } else {
@@ -1979,14 +1986,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ..pages = videoDetail.pages!.reversed.toList();
       if (!videoDetailController.plPlayerController.reverseFromFirst) {
         // keep current episode
-        ugcIntroController.updateIndex(force: true);
+        updateIndex();
       } else {
         // switch to first episode
         final episode = videoDetail.pages!.first;
         if (episode.cid != videoDetailController.cid.value) {
           ugcIntroController.onChangeEpisode(episode);
         } else {
-          ugcIntroController.updateIndex(force: true);
+          updateIndex();
         }
       }
     }
