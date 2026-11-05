@@ -164,7 +164,10 @@ abstract final class SettingBoxKey {
       buvid = 'buvid',
       blockAtOnlyReply = 'blockAtOnlyReply',
       blockReplyAtCount = 'blockReplyAtCount',
-      filterIntro = 'filterIntro';
+      filterIntro = 'filterIntro',
+      purifyBackupDirectory = 'purifyBackupDirectory',
+      purifyBackupAuto = 'purifyBackupAuto',
+      purifyBackupLastAt = 'purifyBackupLastAt';
 
   static const String superChatType = 'superChatType',
       enableFullScreenSC = 'enableFullScreenSC',
