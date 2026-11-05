@@ -284,7 +284,6 @@ abstract final class ReplyGrpc {
     Int64? rpid,
     required Mode mode,
     required String? offset,
-    required Int64? cursorNext,
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
   }) async {
@@ -294,10 +293,6 @@ abstract final class ReplyGrpc {
         oid: Int64(oid),
         type: Int64(type),
         rpid: rpid,
-        // cursor: CursorReq(
-        //   mode: mode,
-        //   next: cursorNext,
-        // ),
         mode: mode,
         pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
