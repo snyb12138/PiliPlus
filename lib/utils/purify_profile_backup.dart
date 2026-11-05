@@ -133,10 +133,8 @@ abstract final class PurifyProfileBackup {
     SettingBoxKey.purifyBackupLastAt,
   };
 
-  static StreamSubscription? _settingSubscription;
-  static StreamSubscription? _videoSubscription;
-  static StreamSubscription? _localCacheSubscription;
   static Timer? _timer;
+  static bool _initialized = false;
   static bool _suspended = false;
   static bool _writing = false;
 
@@ -148,14 +146,15 @@ abstract final class PurifyProfileBackup {
       : path.join(directory, fileName);
 
   static void init() {
-    if (_settingSubscription != null) return;
-    _settingSubscription = GStorage.setting.watch().listen((event) {
+    if (_initialized) return;
+    _initialized = true;
+    GStorage.setting.watch().listen((event) {
       if (!_metadataKeys.contains(event.key)) _scheduleBackup();
     });
-    _videoSubscription = GStorage.video.watch().listen((_) {
+    GStorage.video.watch().listen((_) {
       _scheduleBackup();
     });
-    _localCacheSubscription = GStorage.localCache.watch().listen((event) {
+    GStorage.localCache.watch().listen((event) {
       if (_localCacheKeys.contains(event.key)) _scheduleBackup();
     });
   }
@@ -267,7 +266,7 @@ abstract final class PurifyProfileBackup {
       }
     }
     if (currentError != null) throw FormatException('备份文件损坏：$currentError');
-    throw FileSystemException('所选目录中没有配置方案备份');
+    throw const FileSystemException('所选目录中没有配置方案备份');
   }
 
   static Future<PurifyProfileReadResult> restore() async {
@@ -331,10 +330,9 @@ abstract final class PurifyProfileBackup {
   }
 
   static void _reloadRuntimeSettings() {
-    ReplyGrpc
-      ..antiGoodsReply = Pref.antiGoodsReply
-      ..blockAtOnlyReply = Pref.blockAtOnlyReply
-      ..blockReplyAtCount = Pref.blockReplyAtCount;
+    ReplyGrpc.antiGoodsReply = Pref.antiGoodsReply;
+    ReplyGrpc.blockAtOnlyReply = Pref.blockAtOnlyReply;
+    ReplyGrpc.blockReplyAtCount = Pref.blockReplyAtCount;
     RecommendFilter.reloadFromPrefs();
   }
 
