@@ -1081,6 +1081,15 @@ abstract final class Pref {
 
   static String? get downloadPath => _setting.get(SettingBoxKey.downloadPath);
 
+  static String get purifyBackupDirectory =>
+      _setting.get(SettingBoxKey.purifyBackupDirectory, defaultValue: '');
+
+  static bool get purifyBackupAuto =>
+      _setting.get(SettingBoxKey.purifyBackupAuto, defaultValue: false);
+
+  static String get purifyBackupLastAt =>
+      _setting.get(SettingBoxKey.purifyBackupLastAt, defaultValue: '');
+
   static String? get imageSavePath => _setting.get(SettingBoxKey.imageSavePath);
 
   static String? get liveCdnUrl => _setting.get(SettingBoxKey.liveCdnUrl);

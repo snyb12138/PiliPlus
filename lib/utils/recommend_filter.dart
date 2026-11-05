@@ -16,6 +16,16 @@ abstract final class RecommendFilter {
   );
   static bool enableFilter = rcmdRegExp.pattern.isNotEmpty;
 
+  static void reloadFromPrefs() {
+    minDurationForRcmd = Pref.minDurationForRcmd;
+    minPlayForRcmd = Pref.minPlayForRcmd;
+    minLikeRatioForRecommend = Pref.minLikeRatioForRecommend;
+    exemptFilterForFollowed = Pref.exemptFilterForFollowed;
+    applyFilterToRelatedVideos = Pref.applyFilterToRelatedVideos;
+    rcmdRegExp = RegExp(Pref.banWordForRecommend, caseSensitive: false);
+    enableFilter = rcmdRegExp.pattern.isNotEmpty;
+  }
+
   static VideoPurifyConfig get videoPurifyConfig => VideoPurifyConfig(
     keywordPattern: rcmdRegExp.pattern,
     applyToRelatedVideos: applyFilterToRelatedVideos,

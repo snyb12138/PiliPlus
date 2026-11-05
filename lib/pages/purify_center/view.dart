@@ -1,10 +1,16 @@
+import 'dart:io';
+
+import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
+import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -34,6 +40,118 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     if (Pref.danmakuFilterRule.restoreSessionDisabledRegex() && mounted) {
       setState(() {});
     }
+  }
+
+  Future<bool> _selectBackupDirectory() async {
+    try {
+      final current = PurifyProfileBackup.directory;
+      final selected = await FilePicker.getDirectoryPath(
+        initialDirectory: current.isNotEmpty && Directory(current).existsSync()
+            ? current
+            : null,
+      );
+      if (selected == null) return false;
+      if (selected == current) return true;
+      await PurifyProfileBackup.setDirectory(selected);
+      if (!mounted) return true;
+      setState(() {});
+      SmartDialog.showToast(
+        PurifyProfileBackup.hasBackup()
+            ? '已找到现有配置方案，可点击“恢复”读取'
+            : '备份目录已设置',
+      );
+      return true;
+    } catch (e) {
+      SmartDialog.showToast('设置备份目录失败：$e');
+      return false;
+    }
+  }
+
+  Future<bool> _confirmOverwriteExistingBackup() async {
+    if (PurifyProfileBackup.lastBackupAt.isNotEmpty ||
+        !PurifyProfileBackup.hasBackup()) {
+      return true;
+    }
+    if (!mounted) return false;
+    return showConfirmDialog(
+      context: context,
+      title: const Text('覆盖现有配置方案？'),
+      content: const Text(
+        '所选目录已有备份，可能来自重新安装前。建议先恢复；继续备份会把当前设置写入该文件。',
+      ),
+    );
+  }
+
+  Future<bool> _backupProfile() async {
+    if (PurifyProfileBackup.directory.isEmpty &&
+        !await _selectBackupDirectory()) {
+      return false;
+    }
+    if (!await _confirmOverwriteExistingBackup()) return false;
+    SmartDialog.showLoading(msg: '正在备份配置方案…');
+    try {
+      await PurifyProfileBackup.backupNow();
+      if (mounted) setState(() {});
+      SmartDialog.dismiss();
+      SmartDialog.showToast('配置方案已备份');
+      return true;
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast('备份失败：$e');
+      return false;
+    }
+  }
+
+  Future<void> _restoreProfile() async {
+    if (PurifyProfileBackup.directory.isEmpty &&
+        !await _selectBackupDirectory()) {
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showConfirmDialog(
+      context: context,
+      title: const Text('恢复配置方案？'),
+      content: const Text(
+        '将替换当前通用设置和净化规则；账号、Cookie、历史记录与 WebDAV 密钥不受影响。',
+      ),
+    );
+    if (!confirmed) return;
+    SmartDialog.showLoading(msg: '正在恢复配置方案…');
+    try {
+      final result = await PurifyProfileBackup.restore();
+      if (mounted) setState(() {});
+      SmartDialog.dismiss();
+      SmartDialog.showToast(
+        '${result.usedPrevious ? '当前文件损坏，已从上一版恢复。' : '恢复成功。'}重启应用后全部设置生效',
+      );
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast('恢复失败：$e');
+    }
+  }
+
+  Future<void> _toggleAutoBackup(bool value) async {
+    if (!value) {
+      await PurifyProfileBackup.setAutoBackup(false);
+      if (mounted) setState(() {});
+      return;
+    }
+    if (!await _backupProfile()) return;
+    await PurifyProfileBackup.setAutoBackup(true);
+    if (mounted) setState(() {});
+    SmartDialog.showToast('自动备份已开启');
+  }
+
+  String _backupStatus() {
+    final directory = PurifyProfileBackup.directory;
+    if (directory.isEmpty) {
+      return '尚未选择固定目录；建议使用卸载后仍保留的公共目录';
+    }
+    final last = DateTime.tryParse(PurifyProfileBackup.lastBackupAt)?.toLocal();
+    final lastText = last == null
+        ? '尚未在本次安装中备份'
+        : '上次备份 ${last.toString().substring(0, 19)}';
+    return '$directory\n$lastText';
   }
 
   Future<void> _reloadReplies() async {
@@ -218,6 +336,60 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.settings_backup_restore),
+                  title: const Text('本地配置方案备份'),
+                  subtitle: Text(
+                    _backupStatus(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  isThreeLine: true,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _selectBackupDirectory,
+                          icon: const Icon(Icons.folder_outlined),
+                          label: const Text('选择目录'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: _backupProfile,
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text('立即备份'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _restoreProfile,
+                          icon: const Icon(Icons.restore_outlined),
+                          label: const Text('恢复'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  value: PurifyProfileBackup.autoBackup,
+                  onChanged: _toggleAutoBackup,
+                  title: const Text('配置变化后自动备份'),
+                  subtitle: const Text(
+                    '固定文件名保存，并保留上一版；不包含账号、Cookie、历史和远程备份密钥',
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
