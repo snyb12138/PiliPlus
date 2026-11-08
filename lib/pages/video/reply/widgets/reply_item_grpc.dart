@@ -774,7 +774,7 @@ class ReplyItemGrpc extends StatelessWidget {
         trailing: Row(
           mainAxisSize: .min,
           children: [
-            if (trailing != null) trailing,
+            ?trailing,
             _ReplyPurifyQuickActions(
               reply: replyItem,
               onBlocked: () => onDelete?.call(replyItem, null),
