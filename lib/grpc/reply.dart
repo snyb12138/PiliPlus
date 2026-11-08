@@ -260,10 +260,12 @@ abstract final class ReplyGrpc {
     List<ReplyInfo> replies, {
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
+    Map<Int64, ReplyInfo>? removed,
   }) {
     replies.removeWhere((reply) {
       final reasons = purifyBlockReasons(reply, isIgnored: isIgnored);
       if (reasons.isNotEmpty) {
+        removed?[reply.id] = reply;
         onBlocked?.call(reply, reasons);
         return true;
       }
@@ -272,6 +274,7 @@ abstract final class ReplyGrpc {
           reply.replies,
           onBlocked: onBlocked,
           isIgnored: isIgnored,
+          removed: removed,
         );
       }
       return false;
@@ -306,13 +309,17 @@ abstract final class ReplyGrpc {
 
       // keyword filter
       if (response.hasUpTop()) {
-        final reasons = purifyBlockReasons(
-          response.upTop,
-          isIgnored: isIgnored,
-        );
+        final topReply = response.upTop;
+        final reasons = purifyBlockReasons(topReply, isIgnored: isIgnored);
         if (reasons.isNotEmpty) {
-          onBlocked?.call(response.upTop, reasons);
+          onBlocked?.call(topReply, reasons);
           response.clearUpTop();
+        } else {
+          _filterReplies(
+            topReply.replies,
+            onBlocked: onBlocked,
+            isIgnored: isIgnored,
+          );
         }
       }
 
@@ -322,6 +329,21 @@ abstract final class ReplyGrpc {
           onBlocked: onBlocked,
           isIgnored: isIgnored,
         );
+      }
+
+      if (response.replies.isEmpty && !response.hasUpTop()) {
+        final offset = response.paginationReply.nextOffset;
+        if (offset.isNotEmpty && !response.cursor.isEnd) {
+          return mainList(
+            type: type,
+            oid: oid,
+            rpid: rpid,
+            mode: mode,
+            offset: offset,
+            onBlocked: onBlocked,
+            isIgnored: isIgnored,
+          );
+        }
       }
     }
     return res;
@@ -336,6 +358,7 @@ abstract final class ReplyGrpc {
     required String? offset,
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
+    Map<Int64, ReplyInfo>? removed,
   }) async {
     final res = await GrpcReq.request(
       GrpcUrl.detailList,
@@ -356,6 +379,7 @@ abstract final class ReplyGrpc {
         response.root.replies,
         onBlocked: onBlocked,
         isIgnored: isIgnored,
+        removed: removed,
       );
     }
     return res;
