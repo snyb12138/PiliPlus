@@ -1371,9 +1371,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void onSeekEnd() {
-    if (showSeekPreview) {
-      showPreview.value = false;
-    }
+    hidePreviewIfNeeded();
     hasToasted = false;
     isSeeking.value = false;
     hideTaskControls();
@@ -1857,8 +1855,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  void _clearPreview() {
+  void hidePreviewIfNeeded() {
+    if (showSeekPreview) {
+      hidePreview();
+    }
+  }
+
+  void hidePreview() {
+    hoverDx = null;
     showPreview.value = false;
+  }
+
+  void _clearPreview() {
+    hidePreview();
     previewIndex.value = null;
     videoShot = null;
     for (final i in previewCache.values) {
