@@ -169,7 +169,8 @@ abstract final class SettingBoxKey {
       purifyBackupDirectory = 'purifyBackupDirectory',
       purifyBackupAuto = 'purifyBackupAuto',
       purifyBackupLastAt = 'purifyBackupLastAt',
-      showRefreshFAB = 'showRefreshFAB';
+      showRefreshFAB = 'showRefreshFAB',
+      autoWearMedal = 'autoWearMedal';
 
   static const String superChatType = 'superChatType',
       enableFullScreenSC = 'enableFullScreenSC',
