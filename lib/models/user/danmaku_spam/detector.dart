@@ -177,10 +177,11 @@ class DanmakuSpamDetector {
 
     final key = normalized.repeatBaseKey;
     final events = _touchEvents(key);
-    events.removeWhere(
-      (event) => progress - event.progress > senderWindowMilliseconds,
-    );
-    events.add(_SpamEvent(progress: progress, sender: sender));
+    events
+      ..removeWhere(
+        (event) => progress - event.progress > senderWindowMilliseconds,
+      )
+      ..add(_SpamEvent(progress: progress, sender: sender));
 
     final globalEvents = events
         .where(

@@ -45,7 +45,7 @@ void main() {
   test('normalized and repeat keys use the same 64 rune boundary', () {
     final prefix = List<String>.filled(64, '甲').join();
     final exactly64 = DanmakuSpamDetector.normalize(prefix);
-    final over64 = DanmakuSpamDetector.normalize('${prefix}乙');
+    final over64 = DanmakuSpamDetector.normalize('$prefix乙');
 
     expect(exactly64.wasTruncated, isFalse);
     expect(over64.wasTruncated, isTrue);
@@ -79,8 +79,9 @@ void main() {
 
   test('same sender ten second window wins when both conditions match', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector.inspect(content: '好耶', progress: 0, sender: 'same');
-    detector.inspect(content: '好耶', progress: 2000, sender: 'same');
+    detector
+      ..inspect(content: '好耶', progress: 0, sender: 'same')
+      ..inspect(content: '好耶', progress: 2000, sender: 'same');
     final hit = detector.inspect(
       content: '好耶',
       progress: 4000,
@@ -94,8 +95,9 @@ void main() {
 
   test('same sender rule can trigger outside the global window', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector.inspect(content: '来了', progress: 0, sender: 'same');
-    detector.inspect(content: '来了', progress: 6000, sender: 'same');
+    detector
+      ..inspect(content: '来了', progress: 0, sender: 'same')
+      ..inspect(content: '来了', progress: 6000, sender: 'same');
     final hit = detector.inspect(
       content: '来了',
       progress: 9000,
@@ -147,9 +149,10 @@ void main() {
 
   test('reset clears window state without leaking across video sessions', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector.inspect(content: '测试', progress: 0, sender: 'a');
-    detector.inspect(content: '测试', progress: 1000, sender: 'b');
-    detector.reset(keepAllowances: false);
+    detector
+      ..inspect(content: '测试', progress: 0, sender: 'a')
+      ..inspect(content: '测试', progress: 1000, sender: 'b')
+      ..reset(keepAllowances: false);
 
     expect(
       detector.inspect(content: '测试', progress: 2000, sender: 'c'),
