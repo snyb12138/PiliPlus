@@ -19,6 +19,7 @@ void main() {
     expect(defaults.blockTimeStamps, isFalse);
     expect(defaults.blockPeopleCounts, isFalse);
     expect(defaults.blockShortCheckIns, isFalse);
+    expect(defaults.blockRepeatedSpam, isFalse);
   });
 
   group('danmaku assistant matching', () {
@@ -66,6 +67,7 @@ void main() {
       gentleRules: const ['bar'],
       blockDateStamps: false,
       blockShortCheckIns: true,
+      blockRepeatedSpam: true,
     );
 
     final restored = DanmakuAssistantConfig.fromStorage(custom.toStorage());
@@ -75,6 +77,21 @@ void main() {
     expect(restored.blockTimeStamps, isFalse);
     expect(restored.blockPeopleCounts, isFalse);
     expect(restored.blockShortCheckIns, isTrue);
+    expect(restored.blockRepeatedSpam, isTrue);
+  });
+
+  test('legacy storage keeps repeated spam detection disabled', () {
+    final restored = DanmakuAssistantConfig.fromStorage(const {
+      'version': 1,
+      'absoluteRules': <String>[],
+      'gentleRules': <String>[],
+      'blockDateStamps': false,
+      'blockTimeStamps': false,
+      'blockPeopleCounts': false,
+      'blockShortCheckIns': false,
+    });
+
+    expect(restored.blockRepeatedSpam, isFalse);
   });
 
   test('regex safety rejects common catastrophic structures', () {

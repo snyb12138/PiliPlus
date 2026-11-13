@@ -4,7 +4,8 @@ enum DanmakuAssistantKind {
   dateStamp('日期打卡'),
   timeStamp('时间打卡'),
   peopleCount('人数刷屏'),
-  shortCheckIn('短打卡');
+  shortCheckIn('短打卡'),
+  repeatedSpam('重复刷屏');
 
   const DanmakuAssistantKind(this.label);
 
@@ -16,11 +17,25 @@ class DanmakuAssistantMatch {
     required this.kind,
     required this.reason,
     this.rule,
+    this.countAtHit,
+    this.sameSenderCountAtHit,
+    this.windowStartProgress,
+    this.windowEndProgress,
+    this.normalizedKey,
+    this.repeatBaseKey,
+    this.senderHash,
   });
 
   final DanmakuAssistantKind kind;
   final String reason;
   final String? rule;
+  final int? countAtHit;
+  final int? sameSenderCountAtHit;
+  final int? windowStartProgress;
+  final int? windowEndProgress;
+  final String? normalizedKey;
+  final String? repeatBaseKey;
+  final String? senderHash;
 }
 
 class DanmakuAssistantRecord {
@@ -43,6 +58,7 @@ class DanmakuAssistantConfig {
     required this.blockTimeStamps,
     required this.blockPeopleCounts,
     required this.blockShortCheckIns,
+    required this.blockRepeatedSpam,
   });
 
   factory DanmakuAssistantConfig.defaults() => const DanmakuAssistantConfig(
@@ -52,6 +68,7 @@ class DanmakuAssistantConfig {
     blockTimeStamps: false,
     blockPeopleCounts: false,
     blockShortCheckIns: false,
+    blockRepeatedSpam: false,
   );
 
   factory DanmakuAssistantConfig.fromStorage(dynamic raw) {
@@ -95,6 +112,10 @@ class DanmakuAssistantConfig {
         'blockShortCheckIns',
         defaults.blockShortCheckIns,
       ),
+      blockRepeatedSpam: readBool(
+        'blockRepeatedSpam',
+        defaults.blockRepeatedSpam,
+      ),
     );
   }
 
@@ -104,6 +125,7 @@ class DanmakuAssistantConfig {
   final bool blockTimeStamps;
   final bool blockPeopleCounts;
   final bool blockShortCheckIns;
+  final bool blockRepeatedSpam;
 
   static final RegExp _dateStamp = RegExp(
     r'^(?:(?:20\d{2}\s*[年./-]\s*)?\d{1,2}\s*(?:月|[./-])\s*\d{1,2}\s*(?:日|号)?|20\d{2}\s*(?:年|[./-])\s*\d{1,2}\s*月?)(?:\s*(?:[01]?\d|2[0-3])\s*(?:[:时点]\s*[0-5]?\d\s*分?)?)?(?:\s+\d{1,7}\s*人)?(?:\s*(?:前来)?(?:打卡|签到|留名|考古|探访古迹|到此一游))?$',
@@ -182,6 +204,7 @@ class DanmakuAssistantConfig {
     bool? blockTimeStamps,
     bool? blockPeopleCounts,
     bool? blockShortCheckIns,
+    bool? blockRepeatedSpam,
   }) => DanmakuAssistantConfig(
     absoluteRules: absoluteRules ?? this.absoluteRules,
     gentleRules: gentleRules ?? this.gentleRules,
@@ -189,15 +212,17 @@ class DanmakuAssistantConfig {
     blockTimeStamps: blockTimeStamps ?? this.blockTimeStamps,
     blockPeopleCounts: blockPeopleCounts ?? this.blockPeopleCounts,
     blockShortCheckIns: blockShortCheckIns ?? this.blockShortCheckIns,
+    blockRepeatedSpam: blockRepeatedSpam ?? this.blockRepeatedSpam,
   );
 
   Map<String, Object> toStorage() => {
-    'version': 1,
+    'version': 2,
     'absoluteRules': absoluteRules,
     'gentleRules': gentleRules,
     'blockDateStamps': blockDateStamps,
     'blockTimeStamps': blockTimeStamps,
     'blockPeopleCounts': blockPeopleCounts,
     'blockShortCheckIns': blockShortCheckIns,
+    'blockRepeatedSpam': blockRepeatedSpam,
   };
 }

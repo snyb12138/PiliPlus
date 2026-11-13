@@ -285,6 +285,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       danmaku.blockTimeStamps,
       danmaku.blockPeopleCounts,
       danmaku.blockShortCheckIns,
+      danmaku.blockRepeatedSpam,
     ].where((enabled) => enabled).length;
     final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
     final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;
