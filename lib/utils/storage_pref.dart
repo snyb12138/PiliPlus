@@ -1084,6 +1084,11 @@ abstract final class Pref {
   static String get purifyBackupDirectory =>
       _setting.get(SettingBoxKey.purifyBackupDirectory, defaultValue: '');
 
+  static String get purifyBackupDirectoryLabel => _setting.get(
+    SettingBoxKey.purifyBackupDirectoryLabel,
+    defaultValue: '',
+  );
+
   static bool get purifyBackupAuto =>
       _setting.get(SettingBoxKey.purifyBackupAuto, defaultValue: false);
 

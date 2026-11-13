@@ -45,18 +45,28 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
   Future<bool> _selectBackupDirectory() async {
     try {
       final current = PurifyProfileBackup.directory;
-      final selected = await FilePicker.getDirectoryPath(
-        initialDirectory: current.isNotEmpty && Directory(current).existsSync()
-            ? current
-            : null,
-      );
-      if (selected == null) return false;
-      if (selected == current) return true;
-      await PurifyProfileBackup.setDirectory(selected);
+      if (Platform.isAndroid) {
+        final selected = await PurifyProfileBackup.pickAndroidDirectory();
+        if (selected == null) return false;
+        await PurifyProfileBackup.setDirectory(
+          selected.uri,
+          displayName: selected.label,
+        );
+      } else {
+        final selected = await FilePicker.getDirectoryPath(
+          initialDirectory:
+              current.isNotEmpty && Directory(current).existsSync()
+              ? current
+              : null,
+        );
+        if (selected == null) return false;
+        if (selected == current) return true;
+        await PurifyProfileBackup.setDirectory(selected);
+      }
       if (!mounted) return true;
       setState(() {});
       SmartDialog.showToast(
-        PurifyProfileBackup.hasBackup()
+        await PurifyProfileBackup.hasBackup()
             ? '已找到现有配置方案，可点击“恢复”读取'
             : '备份目录已设置',
       );
@@ -69,7 +79,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
 
   Future<bool> _confirmOverwriteExistingBackup() async {
     if (PurifyProfileBackup.lastBackupAt.isNotEmpty ||
-        !PurifyProfileBackup.hasBackup()) {
+        !await PurifyProfileBackup.hasBackup()) {
       return true;
     }
     if (!mounted) return false;
@@ -83,7 +93,8 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
   }
 
   Future<bool> _backupProfile() async {
-    if (PurifyProfileBackup.directory.isEmpty &&
+    if ((PurifyProfileBackup.directory.isEmpty ||
+            PurifyProfileBackup.needsDirectoryReselection) &&
         !await _selectBackupDirectory()) {
       return false;
     }
@@ -103,7 +114,8 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
   }
 
   Future<void> _restoreProfile() async {
-    if (PurifyProfileBackup.directory.isEmpty &&
+    if ((PurifyProfileBackup.directory.isEmpty ||
+            PurifyProfileBackup.needsDirectoryReselection) &&
         !await _selectBackupDirectory()) {
       return;
     }
@@ -147,11 +159,17 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     if (directory.isEmpty) {
       return '尚未选择固定目录；建议使用卸载后仍保留的公共目录';
     }
+    if (PurifyProfileBackup.needsDirectoryReselection) {
+      return '旧目录授权已失效；请重新选择备份目录';
+    }
     final last = DateTime.tryParse(PurifyProfileBackup.lastBackupAt)?.toLocal();
     final lastText = last == null
         ? '尚未在本次安装中备份'
         : '上次备份 ${last.toString().substring(0, 19)}';
-    return '$directory\n$lastText';
+    final location = Platform.isAndroid
+        ? PurifyProfileBackup.directoryLabel
+        : directory;
+    return '${location.isEmpty ? '已授权目录' : location}\n$lastText';
   }
 
   Future<void> _reloadReplies() async {

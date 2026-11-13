@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:PiliPlus/build_config.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -16,7 +17,18 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
+
+class PurifyBackupDirectorySelection {
+  const PurifyBackupDirectorySelection({
+    required this.uri,
+    required this.label,
+  });
+
+  final String uri;
+  final String label;
+}
 
 class PurifyProfileData {
   const PurifyProfileData({
@@ -62,6 +74,7 @@ abstract final class PurifyProfileCodec {
     SettingBoxKey.windowPosition,
     SettingBoxKey.isWindowMaximized,
     SettingBoxKey.purifyBackupDirectory,
+    SettingBoxKey.purifyBackupDirectoryLabel,
     SettingBoxKey.purifyBackupAuto,
     SettingBoxKey.purifyBackupLastAt,
   };
@@ -118,6 +131,9 @@ abstract final class PurifyProfileBackup {
   static const String fileName = 'PiliPlus-Purify-profile.json';
   static const String previousFileName =
       'PiliPlus-Purify-profile.previous.json';
+  static const MethodChannel _androidChannel = MethodChannel(
+    'com.snyb12138.piliplus.purify/profile_backup',
+  );
 
   static const Duration _debounce = Duration(seconds: 2);
   static const Set<String> _localCacheKeys = {
@@ -129,6 +145,7 @@ abstract final class PurifyProfileBackup {
   };
   static const Set<String> _metadataKeys = {
     SettingBoxKey.purifyBackupDirectory,
+    SettingBoxKey.purifyBackupDirectoryLabel,
     SettingBoxKey.purifyBackupAuto,
     SettingBoxKey.purifyBackupLastAt,
   };
@@ -139,11 +156,38 @@ abstract final class PurifyProfileBackup {
   static bool _writing = false;
 
   static String get directory => Pref.purifyBackupDirectory;
+  static String get directoryLabel => Pref.purifyBackupDirectoryLabel;
   static bool get autoBackup => Pref.purifyBackupAuto;
   static String get lastBackupAt => Pref.purifyBackupLastAt;
-  static String? get profilePath => directory.isEmpty
+  static bool get needsDirectoryReselection =>
+      Platform.isAndroid &&
+      directory.isNotEmpty &&
+      !directory.startsWith('content://');
+  static String? get profilePath => Platform.isAndroid || directory.isEmpty
       ? null
       : path.join(directory, fileName);
+
+  static Future<PurifyBackupDirectorySelection?> pickAndroidDirectory() async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError('SAF directory selection is Android-only');
+    }
+    final result = await _androidChannel.invokeMapMethod<String, dynamic>(
+      'pickDirectory',
+      <String, dynamic>{
+        if (directory.startsWith('content://')) 'initialUri': directory,
+      },
+    );
+    if (result == null) return null;
+    final uri = result['uri'];
+    final label = result['label'];
+    if (uri is! String || uri.isEmpty) {
+      throw const FormatException('系统没有返回有效的备份目录');
+    }
+    return PurifyBackupDirectorySelection(
+      uri: uri,
+      label: label is String && label.isNotEmpty ? label : '已授权目录',
+    );
+  }
 
   static void init() {
     if (_initialized) return;
@@ -159,13 +203,25 @@ abstract final class PurifyProfileBackup {
     });
   }
 
-  static Future<void> setDirectory(String value) async {
+  static Future<void> setDirectory(
+    String value, {
+    String? displayName,
+  }) async {
     final trimmed = value.trim();
     if (trimmed.isEmpty) throw ArgumentError('备份目录不能为空');
-    final normalized = path.normalize(trimmed);
+    final normalized = Platform.isAndroid && trimmed.startsWith('content://')
+        ? trimmed
+        : path.normalize(trimmed);
     _timer?.cancel();
     await Future.wait([
       GStorage.setting.put(SettingBoxKey.purifyBackupDirectory, normalized),
+      if (displayName != null)
+        GStorage.setting.put(
+          SettingBoxKey.purifyBackupDirectoryLabel,
+          displayName,
+        )
+      else
+        GStorage.setting.delete(SettingBoxKey.purifyBackupDirectoryLabel),
       GStorage.setting.put(SettingBoxKey.purifyBackupAuto, false),
       GStorage.setting.delete(SettingBoxKey.purifyBackupLastAt),
     ]);
@@ -175,26 +231,43 @@ abstract final class PurifyProfileBackup {
     if (value && directory.isEmpty) {
       throw StateError('请先选择备份目录');
     }
+    if (value && needsDirectoryReselection) {
+      throw StateError('请重新授权 Android 备份目录');
+    }
     await GStorage.setting.put(SettingBoxKey.purifyBackupAuto, value);
   }
 
-  static bool hasBackup() {
-    final target = profilePath;
-    if (target == null) return false;
+  static Future<bool> hasBackup() async {
+    if (directory.isEmpty || needsDirectoryReselection) return false;
+    if (Platform.isAndroid) {
+      try {
+        return await _androidChannel.invokeMethod<bool>(
+              'hasBackup',
+              <String, dynamic>{
+                'directoryUri': directory,
+                'targetName': fileName,
+                'previousName': previousFileName,
+              },
+            ) ??
+            false;
+      } on PlatformException catch (error) {
+        _throwAndroidStorageError(error);
+      }
+    }
+    final target = profilePath!;
     if (File(target).existsSync()) return true;
     return File(path.join(directory, previousFileName)).existsSync();
   }
 
   static Future<void> backupNow() async {
     if (_writing) return;
-    final targetPath = profilePath;
-    if (targetPath == null) throw StateError('请先选择备份目录');
+    if (directory.isEmpty) throw StateError('请先选择备份目录');
+    if (needsDirectoryReselection) {
+      throw StateError('旧备份目录没有 Android 写入授权，请重新选择目录');
+    }
     _timer?.cancel();
     _writing = true;
     try {
-      final folder = Directory(directory);
-      if (!folder.existsSync()) await folder.create(recursive: true);
-
       final settings = PurifyProfileCodec.sanitizeSettings(
         jsonDecode(GStorage.exportAllSettings()) as Map,
       );
@@ -211,25 +284,44 @@ abstract final class PurifyProfileBackup {
         'settings': settings,
         'purify': ConfigArchive.exportPurifyConfig(),
       };
+      final encoded = Utils.jsonEncoder.convert(profile);
+      PurifyProfileCodec.decode(jsonDecode(encoded));
 
-      final target = File(targetPath);
-      final temporary = File('$targetPath.tmp');
-      final previous = File(path.join(directory, previousFileName));
-      await temporary.writeAsString(
-        Utils.jsonEncoder.convert(profile),
-        flush: true,
-      );
-      PurifyProfileCodec.decode(jsonDecode(await temporary.readAsString()));
-
-      if (previous.existsSync()) await previous.delete();
-      if (target.existsSync()) await target.rename(previous.path);
-      try {
-        await temporary.rename(target.path);
-      } catch (_) {
-        if (!target.existsSync() && previous.existsSync()) {
-          await previous.rename(target.path);
+      if (Platform.isAndroid) {
+        try {
+          await _androidChannel.invokeMethod<bool>(
+            'writeBackup',
+            <String, dynamic>{
+              'directoryUri': directory,
+              'targetName': fileName,
+              'previousName': previousFileName,
+              'bytes': Uint8List.fromList(utf8.encode(encoded)),
+            },
+          );
+        } on PlatformException catch (error) {
+          _throwAndroidStorageError(error);
         }
-        rethrow;
+      } else {
+        final targetPath = profilePath!;
+        final folder = Directory(directory);
+        if (!folder.existsSync()) await folder.create(recursive: true);
+
+        final target = File(targetPath);
+        final temporary = File('$targetPath.tmp');
+        final previous = File(path.join(directory, previousFileName));
+        await temporary.writeAsString(encoded, flush: true);
+        PurifyProfileCodec.decode(jsonDecode(await temporary.readAsString()));
+
+        if (previous.existsSync()) await previous.delete();
+        if (target.existsSync()) await target.rename(previous.path);
+        try {
+          await temporary.rename(target.path);
+        } catch (_) {
+          if (!target.existsSync() && previous.existsSync()) {
+            await previous.rename(target.path);
+          }
+          rethrow;
+        }
       }
       await GStorage.setting.put(
         SettingBoxKey.purifyBackupLastAt,
@@ -242,23 +334,26 @@ abstract final class PurifyProfileBackup {
 
   static Future<PurifyProfileReadResult> readBackup() async {
     if (directory.isEmpty) throw StateError('请先选择备份目录');
-    final target = File(path.join(directory, fileName));
-    final previous = File(path.join(directory, previousFileName));
+    if (needsDirectoryReselection) {
+      throw StateError('旧备份目录没有 Android 读取授权，请重新选择目录');
+    }
     Object? currentError;
-    if (target.existsSync()) {
+    final target = await _readBackupFile(fileName);
+    if (target != null) {
       try {
         final data = PurifyProfileCodec.decode(
-          jsonDecode(await target.readAsString()),
+          jsonDecode(utf8.decode(target)),
         );
         return PurifyProfileReadResult(data: data, usedPrevious: false);
       } catch (e) {
         currentError = e;
       }
     }
-    if (previous.existsSync()) {
+    final previous = await _readBackupFile(previousFileName);
+    if (previous != null) {
       try {
         final data = PurifyProfileCodec.decode(
-          jsonDecode(await previous.readAsString()),
+          jsonDecode(utf8.decode(previous)),
         );
         return PurifyProfileReadResult(data: data, usedPrevious: true);
       } catch (e) {
@@ -267,6 +362,31 @@ abstract final class PurifyProfileBackup {
     }
     if (currentError != null) throw FormatException('备份文件损坏：$currentError');
     throw const FileSystemException('所选目录中没有配置方案备份');
+  }
+
+  static Future<Uint8List?> _readBackupFile(String name) async {
+    if (Platform.isAndroid) {
+      try {
+        return _androidChannel.invokeMethod<Uint8List>(
+          'readFile',
+          <String, dynamic>{
+            'directoryUri': directory,
+            'name': name,
+          },
+        );
+      } on PlatformException catch (error) {
+        _throwAndroidStorageError(error);
+      }
+    }
+    final file = File(path.join(directory, name));
+    return file.existsSync() ? file.readAsBytes() : null;
+  }
+
+  static Never _throwAndroidStorageError(PlatformException error) {
+    throw StateError(
+      'Android 备份目录不可访问，请重新选择目录'
+      '${error.message == null ? '' : '：${error.message}'}',
+    );
   }
 
   static Future<PurifyProfileReadResult> restore() async {
@@ -337,7 +457,13 @@ abstract final class PurifyProfileBackup {
   }
 
   static void _scheduleBackup() {
-    if (_suspended || _writing || !autoBackup || directory.isEmpty) return;
+    if (_suspended ||
+        _writing ||
+        !autoBackup ||
+        directory.isEmpty ||
+        needsDirectoryReselection) {
+      return;
+    }
     _timer?.cancel();
     _timer = Timer(_debounce, () {
       unawaited(

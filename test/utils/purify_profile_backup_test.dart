@@ -48,6 +48,7 @@ void main() {
             SettingBoxKey.buvid: 'device-id',
             SettingBoxKey.downloadPath: '/device/path',
             SettingBoxKey.purifyBackupDirectory: '/backup/path',
+            SettingBoxKey.purifyBackupDirectoryLabel: 'backup',
           },
           PurifyProfileCodec.videoSection: <String, dynamic>{},
         },
@@ -63,6 +64,10 @@ void main() {
     expect(setting.containsKey(SettingBoxKey.downloadPath), isFalse);
     expect(
       setting.containsKey(SettingBoxKey.purifyBackupDirectory),
+      isFalse,
+    );
+    expect(
+      setting.containsKey(SettingBoxKey.purifyBackupDirectoryLabel),
       isFalse,
     );
   });

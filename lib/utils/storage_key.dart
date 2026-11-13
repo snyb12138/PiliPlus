@@ -167,6 +167,7 @@ abstract final class SettingBoxKey {
       blockReplyAtCount = 'blockReplyAtCount',
       filterIntro = 'filterIntro',
       purifyBackupDirectory = 'purifyBackupDirectory',
+      purifyBackupDirectoryLabel = 'purifyBackupDirectoryLabel',
       purifyBackupAuto = 'purifyBackupAuto',
       purifyBackupLastAt = 'purifyBackupLastAt',
       showRefreshFAB = 'showRefreshFAB',
