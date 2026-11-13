@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:PiliPlus/build_config.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -367,7 +366,7 @@ abstract final class PurifyProfileBackup {
   static Future<Uint8List?> _readBackupFile(String name) async {
     if (Platform.isAndroid) {
       try {
-        return _androidChannel.invokeMethod<Uint8List>(
+        return await _androidChannel.invokeMethod<Uint8List>(
           'readFile',
           <String, dynamic>{
             'directoryUri': directory,
