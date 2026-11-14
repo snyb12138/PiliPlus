@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +39,30 @@ void main() {
     );
     expect(decoded.purify['version'], 4);
     expect(decoded.exportTime, DateTime.utc(2026, 11, 5, 9));
+  });
+
+  test('profile codec decodes bytes selected through Android SAF', () {
+    final decoded = PurifyProfileCodec.decodeBytes(
+      utf8.encode(jsonEncode(validProfile())),
+    );
+
+    expect(decoded.purify['version'], 4);
+    expect(decoded.exportTime, DateTime.utc(2026, 11, 5, 9));
+  });
+
+  test('SAF tree URI remains intact instead of becoming a file path', () {
+    const uri =
+        'content://com.android.externalstorage.documents/tree/primary%3AAliYunPan';
+
+    expect(PurifyProfileBackup.isSafDirectory(uri), isTrue);
+    expect(PurifyProfileBackup.normalizeDirectory('  $uri  '), uri);
+    expect(
+      PurifyProfileBackup.normalizeDirectory(
+        'content:/com.android.externalstorage.documents/tree/primary%3AAliYunPan',
+      ),
+      uri,
+    );
+    expect(PurifyProfileBackup.isSafDirectory('/storage/emulated/0'), isFalse);
   });
 
   test('sensitive and device-specific fields are excluded', () {
@@ -91,6 +118,30 @@ void main() {
         'version': PurifyProfileCodec.version + 1,
       }),
       throwsFormatException,
+    );
+  });
+
+  test('read backup falls back to the retained previous version', () async {
+    final directory = await Directory.systemTemp.createTemp('purify-profile-');
+    addTearDown(() => directory.delete(recursive: true));
+    await File('${directory.path}/${PurifyProfileBackup.fileName}')
+        .writeAsString('{broken');
+    await File('${directory.path}/${PurifyProfileBackup.previousFileName}')
+        .writeAsString(jsonEncode(validProfile()));
+
+    final result = await PurifyProfileBackup.readFromDirectory(directory.path);
+
+    expect(result.usedPrevious, isTrue);
+    expect(result.data.purify['version'], 4);
+  });
+
+  test('missing backup files are not reported as corrupted', () async {
+    final directory = await Directory.systemTemp.createTemp('purify-profile-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    expect(
+      () => PurifyProfileBackup.readFromDirectory(directory.path),
+      throwsA(isA<FileSystemException>()),
     );
   });
 }

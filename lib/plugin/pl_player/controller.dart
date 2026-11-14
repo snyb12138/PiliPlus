@@ -15,6 +15,7 @@ import 'package:PiliPlus/models/common/super_resolution_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
@@ -423,6 +424,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   final RxInt danmakuAssistantRevision = 0.obs;
   int danmakuAssistantBlockedTotal = 0;
   int? _danmakuAssistantCid;
+  final Set<String> danmakuSpamAllowedKeys = <String>{};
   final Set<void Function()> _danmakuFilterReloaders = {};
 
   void addDanmakuFilterReloader(void Function() callback) {
@@ -442,7 +444,26 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   void beginDanmakuAssistantSession(int cid) {
     if (_danmakuAssistantCid == cid) return;
     _danmakuAssistantCid = cid;
+    danmakuSpamAllowedKeys.clear();
     clearDanmakuAssistantRecords();
+  }
+
+  bool isDanmakuSpamAllowed(String content) {
+    final key = DanmakuSpamDetector.normalize(content).repeatBaseKey;
+    return key.isNotEmpty && danmakuSpamAllowedKeys.contains(key);
+  }
+
+  void allowDanmakuSpamForCurrentVideo(String content) {
+    final key = DanmakuSpamDetector.normalize(content).repeatBaseKey;
+    if (key.isEmpty || !danmakuSpamAllowedKeys.add(key)) return;
+    clearDanmakuAssistantRecords();
+    reloadDanmakuFilters();
+  }
+
+  void revokeDanmakuSpamAllowance(String key) {
+    if (!danmakuSpamAllowedKeys.remove(key)) return;
+    clearDanmakuAssistantRecords();
+    reloadDanmakuFilters();
   }
 
   void recordDanmakuAssistantBatch({

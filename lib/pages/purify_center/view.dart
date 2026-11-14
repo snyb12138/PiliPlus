@@ -9,10 +9,12 @@ import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:android_file_picker/android_file_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:saf/saf.dart';
 
 class PurifyCenterPage extends StatefulWidget {
   const PurifyCenterPage({
@@ -45,18 +47,25 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
   Future<bool> _selectBackupDirectory() async {
     try {
       final current = PurifyProfileBackup.directory;
-      final selected = await FilePicker.getDirectoryPath(
-        initialDirectory: current.isNotEmpty && Directory(current).existsSync()
-            ? current
-            : null,
-      );
+      final selected = Platform.isAndroid
+          ? (await Saf().pickDirectory(
+              initialUri: PurifyProfileBackup.isSafDirectory(current)
+                  ? PurifyProfileBackup.normalizeDirectory(current)
+                  : null,
+            ))?.uri
+          : await FilePicker.getDirectoryPath(
+              initialDirectory:
+                  current.isNotEmpty && Directory(current).existsSync()
+                  ? current
+                  : null,
+            );
       if (selected == null) return false;
       if (selected == current) return true;
       await PurifyProfileBackup.setDirectory(selected);
       if (!mounted) return true;
       setState(() {});
       SmartDialog.showToast(
-        PurifyProfileBackup.hasBackup()
+        await PurifyProfileBackup.hasBackup()
             ? '已找到现有配置方案，可点击“恢复”读取'
             : '备份目录已设置',
       );
@@ -69,7 +78,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
 
   Future<bool> _confirmOverwriteExistingBackup() async {
     if (PurifyProfileBackup.lastBackupAt.isNotEmpty ||
-        !PurifyProfileBackup.hasBackup()) {
+        !await PurifyProfileBackup.hasBackup()) {
       return true;
     }
     if (!mounted) return false;
@@ -116,6 +125,12 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       ),
     );
     if (!confirmed) return;
+    await _restoreProfileFromSelectedDirectory();
+  }
+
+  Future<void> _restoreProfileFromSelectedDirectory({
+    bool allowReauthorization = true,
+  }) async {
     SmartDialog.showLoading(msg: '正在恢复配置方案…');
     try {
       final result = await PurifyProfileBackup.restore();
@@ -123,6 +138,50 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       SmartDialog.dismiss();
       SmartDialog.showToast(
         '${result.usedPrevious ? '当前文件损坏，已从上一版恢复。' : '恢复成功。'}重启应用后全部设置生效',
+      );
+    } on PurifyProfileDirectoryAccessException {
+      SmartDialog.dismiss();
+      if (!allowReauthorization || !mounted) {
+        SmartDialog.showToast('备份目录权限已失效，请直接选择配置方案文件恢复');
+        return;
+      }
+      final selectFile = await showConfirmDialog(
+        context: context,
+        title: const Text('选择备份文件恢复？'),
+        content: const Text(
+          'Android 拒绝通过原始目录路径读取文件。接下来请直接选择 PiliPlus-Purify-profile.json；只会读取配置，不会覆盖备份。',
+        ),
+      );
+      if (!selectFile) return;
+      await _restoreProfileFromPickedFile();
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast('恢复失败：$e');
+    }
+  }
+
+  Future<void> _restoreProfileFromPickedFile() async {
+    try {
+      final selected = await FilePicker.pickFile(
+        dialogTitle: '选择 PiliPlus 净化配置方案',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        androidOptions: const FilePickerAndroidOptions(
+          safOptions: AndroidSAFOptions(
+            grant: AndroidSAFGrant.lifetime,
+            accessMode: AndroidSAFAccessMode.readOnly,
+          ),
+        ),
+      );
+      if (selected == null) return;
+      SmartDialog.showLoading(msg: '正在读取并恢复配置方案…');
+      final result = await PurifyProfileBackup.restoreBytes(
+        await selected.readAsBytes(),
+      );
+      if (mounted) setState(() {});
+      SmartDialog.dismiss();
+      SmartDialog.showToast(
+        '${result.usedPrevious ? '已从上一版恢复。' : '恢复成功。'}重启应用后全部设置生效',
       );
     } catch (e) {
       SmartDialog.dismiss();
@@ -285,6 +344,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       danmaku.blockTimeStamps,
       danmaku.blockPeopleCounts,
       danmaku.blockShortCheckIns,
+      danmaku.blockRepeatedSpam,
     ].where((enabled) => enabled).length;
     final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
     final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;

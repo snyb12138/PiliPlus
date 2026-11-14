@@ -239,6 +239,24 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
             ),
             if (total == 0)
               Text('播放或拖动视频后，这里会显示本地命中统计。', style: theme.textTheme.bodySmall),
+            if (playerController.danmakuSpamAllowedKeys.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('本视频已放行', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: playerController.danmakuSpamAllowedKeys
+                    .map(
+                      (key) => InputChip(
+                        label: Text(key),
+                        onDeleted: () =>
+                            playerController.revokeDanmakuSpamAllowance(key),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
           ],
         ),
       ),
@@ -277,6 +295,13 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
         onChanged: (value) =>
             _save(_config.copyWith(blockShortCheckIns: value)),
       ),
+      SwitchListTile(
+        title: const Text('重复短句/符号刷屏（测试）'),
+        subtitle: const Text('默认关闭；拦截单条周期重复及短时间内反复出现的短句'),
+        value: _config.blockRepeatedSpam,
+        onChanged: (value) =>
+            _save(_config.copyWith(blockRepeatedSpam: value)),
+      ),
     ],
   );
 
@@ -307,6 +332,8 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
         final alreadyGentle = _config.gentleRules.any(
           (rule) => rule.trim() == record.content.trim(),
         );
+        final repeatedSpam =
+            blocked && match?.kind == DanmakuAssistantKind.repeatedSpam;
         return ListTile(
           dense: true,
           leading: Text(_formatProgress(record.progress)),
@@ -325,6 +352,13 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
                           removableMatch.rule!,
                         ),
                         icon: const Icon(Icons.remove_circle_outline),
+                      )
+                    : repeatedSpam
+                    ? IconButton(
+                        tooltip: '本视频放行此短句',
+                        onPressed: () => playerController
+                            .allowDanmakuSpamForCurrentVideo(record.content),
+                        icon: const Icon(Icons.visibility_outlined),
                       )
                     : null
               : IconButton(

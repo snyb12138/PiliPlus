@@ -5,6 +5,7 @@ import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -28,6 +29,7 @@ class PlDanmakuController {
   late final _isLogin = Accounts.main.isLogin;
 
   final Map<int, List<DanmakuElem>> _dmSegMap = HashMap();
+  final DanmakuSpamDetector _spamDetector = DanmakuSpamDetector();
   // 已请求的段落标记
   late final Set<int> _requestedSeg = HashSet();
   int _generation = 0;
@@ -36,12 +38,14 @@ class PlDanmakuController {
     _generation++;
     _dmSegMap.clear();
     _requestedSeg.clear();
+    _spamDetector.reset(keepAllowances: false);
   }
 
   void reloadAt(int progress) {
     _generation++;
     _dmSegMap.clear();
     _requestedSeg.clear();
+    _spamDetector.reset();
     _fileDmLoaded = false;
     if (_isFileSource) {
       initFileDmIfNeeded();
@@ -85,13 +89,69 @@ class PlDanmakuController {
     final filters = _plPlayerController.filters;
     final shouldFilter = filters.count != 0;
     final assistant = _plPlayerController.danmakuAssistantConfig;
-    for (final element in elems) {
+    final orderedElems = elems.length < 2
+        ? elems
+        : (List<DanmakuElem>.of(elems)
+            ..sort((a, b) => a.progress.compareTo(b.progress)));
+    for (final element in orderedElems) {
       if (_isLogin) {
         element.isSelf = element.midHash == _plPlayerController.midHash;
       }
 
       if (!element.isSelf) {
-        final match = assistant.match(element.content);
+        var match = assistant.match(element.content);
+        if (match != null) {
+          final record = DanmakuAssistantRecord(
+            content: element.content,
+            progress: element.progress,
+            match: match,
+          );
+          samples.add(record);
+          hits.add(record);
+          continue;
+        }
+
+        if (shouldFilter && filters.remove(element)) {
+          samples.add(
+            DanmakuAssistantRecord(
+              content: element.content,
+              progress: element.progress,
+            ),
+          );
+          continue;
+        }
+
+        if (assistant.blockRepeatedSpam &&
+            !_plPlayerController.isDanmakuSpamAllowed(element.content)) {
+          final spam = _spamDetector.inspect(
+            content: element.content,
+            progress: element.progress,
+            sender: element.midHash.isEmpty
+                ? 'unknown:${element.idStr}'
+                : element.midHash,
+          );
+          if (spam != null) {
+            final countDetail = switch (spam.reason) {
+              DanmakuSpamReason.globalWindow =>
+                '（5 秒内第 ${spam.countAtHit} 条）',
+              DanmakuSpamReason.sameSenderWindow =>
+                '（同一发送者 10 秒内第 ${spam.sameSenderCountAtHit} 条）',
+              _ => '',
+            };
+            match = DanmakuAssistantMatch(
+              kind: DanmakuAssistantKind.repeatedSpam,
+              reason: '${spam.reason.label}$countDetail',
+              countAtHit: spam.countAtHit,
+              sameSenderCountAtHit: spam.sameSenderCountAtHit,
+              windowStartProgress: spam.windowStartProgress,
+              windowEndProgress: spam.windowEndProgress,
+              normalizedKey: spam.normalizedKey,
+              repeatBaseKey: spam.repeatBaseKey,
+              senderHash: spam.senderHash,
+            );
+          }
+        }
+
         final record = DanmakuAssistantRecord(
           content: element.content,
           progress: element.progress,
@@ -100,10 +160,6 @@ class PlDanmakuController {
         samples.add(record);
         if (match != null) {
           hits.add(record);
-          continue;
-        }
-
-        if (shouldFilter && filters.remove(element)) {
           continue;
         }
 

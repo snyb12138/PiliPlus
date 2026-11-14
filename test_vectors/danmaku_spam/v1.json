@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "normalization": [
+    {
+      "caseId": "cjk-fullwidth-space",
+      "input": "吧 　 吧",
+      "normalizedKey": "吧吧",
+      "repeatBaseKey": "吧",
+      "fullLength": 2
+    },
+    {
+      "caseId": "zero-width-bypass",
+      "input": "吧\u200b吧\u200b吧\u200b吧",
+      "normalizedKey": "吧吧吧吧",
+      "repeatBaseKey": "吧",
+      "fullLength": 4
+    },
+    {
+      "caseId": "period-233",
+      "input": "233233",
+      "normalizedKey": "233233",
+      "repeatBaseKey": "233",
+      "fullLength": 6
+    },
+    {
+      "caseId": "period-23",
+      "input": "232323",
+      "normalizedKey": "232323",
+      "repeatBaseKey": "23",
+      "fullLength": 6
+    },
+    {
+      "caseId": "question-width-fold",
+      "input": "？？！？",
+      "normalizedKey": "??!?",
+      "repeatBaseKey": "??!?",
+      "fullLength": 4
+    }
+  ],
+  "internal": [
+    {
+      "caseId": "single-character-four",
+      "input": "吧吧吧吧",
+      "expectedReason": "repeatedCharacter"
+    },
+    {
+      "caseId": "phrase-three",
+      "input": "冲鸭冲鸭冲鸭",
+      "expectedReason": "repeatedPhrase"
+    },
+    {
+      "caseId": "expressive-four-allowed",
+      "input": "哈哈哈哈",
+      "expectedReason": null
+    },
+    {
+      "caseId": "expressive-five-allowed",
+      "input": "哈哈哈哈哈",
+      "expectedReason": null
+    },
+    {
+      "caseId": "expressive-six",
+      "input": "哈哈哈哈哈哈",
+      "expectedReason": "expressiveCharacter"
+    },
+    {
+      "caseId": "mixed-question-bang-four",
+      "input": "？？！？",
+      "expectedReason": "questionBangSymbols"
+    },
+    {
+      "caseId": "question-bang-wins-over-character-repeat",
+      "input": "!!!!!",
+      "expectedReason": "questionBangSymbols"
+    },
+    {
+      "caseId": "decorative-three",
+      "input": "→→→",
+      "expectedReason": "decorativeSymbols"
+    },
+    {
+      "caseId": "mixed-symbol-four-allowed",
+      "input": "+-*/",
+      "expectedReason": null
+    },
+    {
+      "caseId": "mixed-symbol-five",
+      "input": "+-*/=",
+      "expectedReason": "mixedSymbols"
+    }
+  ]
+}
