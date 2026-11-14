@@ -176,8 +176,7 @@ class DanmakuSpamDetector {
     _latestProgress = max(_latestProgress ?? progress, progress);
 
     final key = normalized.repeatBaseKey;
-    final events = _touchEvents(key);
-    events
+    final events = _touchEvents(key)
       ..removeWhere(
         (event) => progress - event.progress > senderWindowMilliseconds,
       )
