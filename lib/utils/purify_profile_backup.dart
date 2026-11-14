@@ -250,7 +250,7 @@ abstract final class PurifyProfileBackup {
     }
   }
 
-  static Future<PurifyProfileReadResult> readBackup() async {
+  static Future<PurifyProfileReadResult> readBackup() {
     if (directory.isEmpty) throw StateError('请先选择备份目录');
     return readFromDirectory(directory);
   }
