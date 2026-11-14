@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:PiliPlus/build_config.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -166,13 +165,11 @@ abstract final class PurifyProfileBackup {
       ? null
       : path.join(directory, fileName);
 
-  @visibleForTesting
   static bool isSafDirectory(String value) {
     final uri = Uri.tryParse(value.trim());
     return uri?.scheme.toLowerCase() == 'content';
   }
 
-  @visibleForTesting
   static String normalizeDirectory(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) throw ArgumentError('备份目录不能为空');
