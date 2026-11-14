@@ -1,6 +1,9 @@
 name: Build
 
 on:
+    push:
+        branches:
+            - feat/danmaku-spam-test
     # pull_request:
     #     types:
     #         - opened
@@ -49,7 +52,7 @@ on:
 
 jobs:
     android:
-        if: ${{ (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_android == 'true' }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_android == 'true' }}
         name: Release Android
         runs-on: ubuntu-latest
         permissions: write-all
@@ -81,6 +84,13 @@ jobs:
             - name: Apply Patch
               shell: pwsh
               run: lib/scripts/patch.ps1 android
+
+            - name: Upload resolved lockfile
+              uses: actions/upload-artifact@v7
+              with:
+                  archive: false
+                  name: Resolved-pubspec-lock
+                  path: pubspec.lock
 
             - name: Validate Purify settings and reply density contract
               run: |
@@ -143,7 +153,7 @@ jobs:
               run: flutter build apk --release --split-per-abi --dart-define-from-file=pili_release.json --no-pub
 
             - name: Flutter Build Dev Apk
-              if: ${{ github.event_name == 'pull_request' }}
+              if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
               run: |
                   flutter build apk --release --split-per-abi --android-project-arg dev=1 --no-pub
 
