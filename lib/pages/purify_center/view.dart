@@ -9,6 +9,7 @@ import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:android_file_picker/android_file_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -49,6 +50,12 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
         initialDirectory: current.isNotEmpty && Directory(current).existsSync()
             ? current
             : null,
+        androidOptions: const FilePickerAndroidOptions(
+          safOptions: AndroidSAFOptions(
+            grant: AndroidSAFGrant.lifetime,
+            accessMode: AndroidSAFAccessMode.readWrite,
+          ),
+        ),
       );
       if (selected == null) return false;
       if (selected == current) return true;
@@ -116,6 +123,12 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       ),
     );
     if (!confirmed) return;
+    await _restoreProfileFromSelectedDirectory();
+  }
+
+  Future<void> _restoreProfileFromSelectedDirectory({
+    bool allowReauthorization = true,
+  }) async {
     SmartDialog.showLoading(msg: '正在恢复配置方案…');
     try {
       final result = await PurifyProfileBackup.restore();
@@ -124,6 +137,21 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
       SmartDialog.showToast(
         '${result.usedPrevious ? '当前文件损坏，已从上一版恢复。' : '恢复成功。'}重启应用后全部设置生效',
       );
+    } on PurifyProfileDirectoryAccessException {
+      SmartDialog.dismiss();
+      if (!allowReauthorization || !mounted) {
+        SmartDialog.showToast('备份目录权限已失效，请重新选择该目录后再试');
+        return;
+      }
+      final reauthorize = await showConfirmDialog(
+        context: context,
+        title: const Text('重新授权备份目录？'),
+        content: const Text(
+          'Android 在重新安装应用后会撤销原目录权限。请重新选择此前的备份目录，配置文件不会被覆盖。',
+        ),
+      );
+      if (!reauthorize || !await _selectBackupDirectory()) return;
+      await _restoreProfileFromSelectedDirectory(allowReauthorization: false);
     } catch (e) {
       SmartDialog.dismiss();
       SmartDialog.showToast('恢复失败：$e');

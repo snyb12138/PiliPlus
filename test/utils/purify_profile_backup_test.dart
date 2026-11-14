@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,6 +94,30 @@ void main() {
         'version': PurifyProfileCodec.version + 1,
       }),
       throwsFormatException,
+    );
+  });
+
+  test('read backup falls back to the retained previous version', () async {
+    final directory = await Directory.systemTemp.createTemp('purify-profile-');
+    addTearDown(() => directory.delete(recursive: true));
+    await File('${directory.path}/${PurifyProfileBackup.fileName}')
+        .writeAsString('{broken');
+    await File('${directory.path}/${PurifyProfileBackup.previousFileName}')
+        .writeAsString(jsonEncode(validProfile()));
+
+    final result = await PurifyProfileBackup.readFromDirectory(directory.path);
+
+    expect(result.usedPrevious, isTrue);
+    expect(result.data.purify['version'], 4);
+  });
+
+  test('missing backup files are not reported as corrupted', () async {
+    final directory = await Directory.systemTemp.createTemp('purify-profile-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    expect(
+      () => PurifyProfileBackup.readFromDirectory(directory.path),
+      throwsA(isA<FileSystemException>()),
     );
   });
 }

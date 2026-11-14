@@ -40,6 +40,16 @@ class PurifyProfileReadResult {
   final bool usedPrevious;
 }
 
+class PurifyProfileDirectoryAccessException implements Exception {
+  const PurifyProfileDirectoryAccessException(this.directory, this.cause);
+
+  final String directory;
+  final FileSystemException cause;
+
+  @override
+  String toString() => '备份目录权限已失效，请重新选择该目录后再试';
+}
+
 abstract final class PurifyProfileCodec {
   static const String schema = 'piliplus-purify-profile';
   static const int version = 1;
@@ -242,31 +252,49 @@ abstract final class PurifyProfileBackup {
 
   static Future<PurifyProfileReadResult> readBackup() async {
     if (directory.isEmpty) throw StateError('请先选择备份目录');
+    return readFromDirectory(directory);
+  }
+
+  @visibleForTesting
+  static Future<PurifyProfileReadResult> readFromDirectory(
+    String directory,
+  ) async {
     final target = File(path.join(directory, fileName));
     final previous = File(path.join(directory, previousFileName));
     Object? currentError;
-    if (target.existsSync()) {
-      try {
-        final data = PurifyProfileCodec.decode(
-          jsonDecode(await target.readAsString()),
-        );
-        return PurifyProfileReadResult(data: data, usedPrevious: false);
-      } catch (e) {
-        currentError = e;
-      }
+    try {
+      final data = await _readProfileFile(target);
+      return PurifyProfileReadResult(data: data, usedPrevious: false);
+    } on PathNotFoundException {
+      // Try the retained previous version below.
+    } on FormatException catch (error) {
+      currentError = error;
     }
-    if (previous.existsSync()) {
-      try {
-        final data = PurifyProfileCodec.decode(
-          jsonDecode(await previous.readAsString()),
-        );
-        return PurifyProfileReadResult(data: data, usedPrevious: true);
-      } catch (e) {
-        currentError ??= e;
-      }
+    try {
+      final data = await _readProfileFile(previous);
+      return PurifyProfileReadResult(data: data, usedPrevious: true);
+    } on PathNotFoundException {
+      // Report the format error from the current file, when present.
+    } on FormatException catch (error) {
+      currentError ??= error;
     }
     if (currentError != null) throw FormatException('备份文件损坏：$currentError');
     throw const FileSystemException('所选目录中没有配置方案备份');
+  }
+
+  static Future<PurifyProfileData> _readProfileFile(File file) async {
+    try {
+      return PurifyProfileCodec.decode(jsonDecode(await file.readAsString()));
+    } on FileSystemException catch (error) {
+      final errorCode = error.osError?.errorCode;
+      if (errorCode == 1 || errorCode == 13) {
+        throw PurifyProfileDirectoryAccessException(
+          file.parent.path,
+          error,
+        );
+      }
+      rethrow;
+    }
   }
 
   static Future<PurifyProfileReadResult> restore() async {
