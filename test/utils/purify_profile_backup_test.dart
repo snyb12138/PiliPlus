@@ -50,6 +50,21 @@ void main() {
     expect(decoded.exportTime, DateTime.utc(2026, 11, 5, 9));
   });
 
+  test('SAF tree URI remains intact instead of becoming a file path', () {
+    const uri =
+        'content://com.android.externalstorage.documents/tree/primary%3AAliYunPan';
+
+    expect(PurifyProfileBackup.isSafDirectory(uri), isTrue);
+    expect(PurifyProfileBackup.normalizeDirectory('  $uri  '), uri);
+    expect(
+      PurifyProfileBackup.normalizeDirectory(
+        'content:/com.android.externalstorage.documents/tree/primary%3AAliYunPan',
+      ),
+      uri,
+    );
+    expect(PurifyProfileBackup.isSafDirectory('/storage/emulated/0'), isFalse);
+  });
+
   test('sensitive and device-specific fields are excluded', () {
     final decoded = PurifyProfileCodec.decode(
       validProfile(

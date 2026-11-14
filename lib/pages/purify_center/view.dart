@@ -14,6 +14,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:saf/saf.dart';
 
 class PurifyCenterPage extends StatefulWidget {
   const PurifyCenterPage({
@@ -46,24 +47,25 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
   Future<bool> _selectBackupDirectory() async {
     try {
       final current = PurifyProfileBackup.directory;
-      final selected = await FilePicker.getDirectoryPath(
-        initialDirectory: current.isNotEmpty && Directory(current).existsSync()
-            ? current
-            : null,
-        androidOptions: const FilePickerAndroidOptions(
-          safOptions: AndroidSAFOptions(
-            grant: AndroidSAFGrant.lifetime,
-            accessMode: AndroidSAFAccessMode.readWrite,
-          ),
-        ),
-      );
+      final selected = Platform.isAndroid
+          ? (await Saf().pickDirectory(
+              initialUri: PurifyProfileBackup.isSafDirectory(current)
+                  ? PurifyProfileBackup.normalizeDirectory(current)
+                  : null,
+            ))?.uri
+          : await FilePicker.getDirectoryPath(
+              initialDirectory:
+                  current.isNotEmpty && Directory(current).existsSync()
+                  ? current
+                  : null,
+            );
       if (selected == null) return false;
       if (selected == current) return true;
       await PurifyProfileBackup.setDirectory(selected);
       if (!mounted) return true;
       setState(() {});
       SmartDialog.showToast(
-        PurifyProfileBackup.hasBackup()
+        await PurifyProfileBackup.hasBackup()
             ? '已找到现有配置方案，可点击“恢复”读取'
             : '备份目录已设置',
       );
@@ -76,7 +78,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
 
   Future<bool> _confirmOverwriteExistingBackup() async {
     if (PurifyProfileBackup.lastBackupAt.isNotEmpty ||
-        !PurifyProfileBackup.hasBackup()) {
+        !await PurifyProfileBackup.hasBackup()) {
       return true;
     }
     if (!mounted) return false;
