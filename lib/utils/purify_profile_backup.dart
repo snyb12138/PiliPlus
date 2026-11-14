@@ -113,6 +113,9 @@ abstract final class PurifyProfileCodec {
     );
   }
 
+  static PurifyProfileData decodeBytes(List<int> bytes) =>
+      decode(jsonDecode(utf8.decode(bytes)));
+
   static Map<String, dynamic> _stringMap(Object? raw, String name) {
     if (raw is! Map) throw FormatException('$name格式不正确');
     final result = <String, dynamic>{};
@@ -299,6 +302,21 @@ abstract final class PurifyProfileBackup {
 
   static Future<PurifyProfileReadResult> restore() async {
     final result = await readBackup();
+    return restoreResult(result);
+  }
+
+  static Future<PurifyProfileReadResult> restoreBytes(List<int> bytes) =>
+      restoreResult(
+        PurifyProfileReadResult(
+          data: PurifyProfileCodec.decodeBytes(bytes),
+          usedPrevious: false,
+        ),
+      );
+
+  @visibleForTesting
+  static Future<PurifyProfileReadResult> restoreResult(
+    PurifyProfileReadResult result,
+  ) async {
     final rollbackSettings =
         jsonDecode(GStorage.exportAllSettings()) as Map<String, dynamic>;
     final rollbackPurify = ConfigArchive.exportPurifyConfig();

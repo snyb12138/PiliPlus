@@ -41,6 +41,15 @@ void main() {
     expect(decoded.exportTime, DateTime.utc(2026, 11, 5, 9));
   });
 
+  test('profile codec decodes bytes selected through Android SAF', () {
+    final decoded = PurifyProfileCodec.decodeBytes(
+      utf8.encode(jsonEncode(validProfile())),
+    );
+
+    expect(decoded.purify['version'], 4);
+    expect(decoded.exportTime, DateTime.utc(2026, 11, 5, 9));
+  });
+
   test('sensitive and device-specific fields are excluded', () {
     final decoded = PurifyProfileCodec.decode(
       validProfile(

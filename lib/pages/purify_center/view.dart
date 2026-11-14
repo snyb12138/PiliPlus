@@ -140,18 +140,47 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     } on PurifyProfileDirectoryAccessException {
       SmartDialog.dismiss();
       if (!allowReauthorization || !mounted) {
-        SmartDialog.showToast('备份目录权限已失效，请重新选择该目录后再试');
+        SmartDialog.showToast('备份目录权限已失效，请直接选择配置方案文件恢复');
         return;
       }
-      final reauthorize = await showConfirmDialog(
+      final selectFile = await showConfirmDialog(
         context: context,
-        title: const Text('重新授权备份目录？'),
+        title: const Text('选择备份文件恢复？'),
         content: const Text(
-          'Android 在重新安装应用后会撤销原目录权限。请重新选择此前的备份目录，配置文件不会被覆盖。',
+          'Android 拒绝通过原始目录路径读取文件。接下来请直接选择 PiliPlus-Purify-profile.json；只会读取配置，不会覆盖备份。',
         ),
       );
-      if (!reauthorize || !await _selectBackupDirectory()) return;
-      await _restoreProfileFromSelectedDirectory(allowReauthorization: false);
+      if (!selectFile) return;
+      await _restoreProfileFromPickedFile();
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast('恢复失败：$e');
+    }
+  }
+
+  Future<void> _restoreProfileFromPickedFile() async {
+    try {
+      final selected = await FilePicker.pickFile(
+        dialogTitle: '选择 PiliPlus 净化配置方案',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        androidOptions: const FilePickerAndroidOptions(
+          safOptions: AndroidSAFOptions(
+            grant: AndroidSAFGrant.lifetime,
+            accessMode: AndroidSAFAccessMode.readOnly,
+          ),
+        ),
+      );
+      if (selected == null) return;
+      SmartDialog.showLoading(msg: '正在读取并恢复配置方案…');
+      final result = await PurifyProfileBackup.restoreBytes(
+        await selected.readAsBytes(),
+      );
+      if (mounted) setState(() {});
+      SmartDialog.dismiss();
+      SmartDialog.showToast(
+        '${result.usedPrevious ? '已从上一版恢复。' : '恢复成功。'}重启应用后全部设置生效',
+      );
     } catch (e) {
       SmartDialog.dismiss();
       SmartDialog.showToast('恢复失败：$e');
