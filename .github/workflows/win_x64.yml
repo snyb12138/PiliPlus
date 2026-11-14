@@ -38,7 +38,7 @@ jobs:
 
       - name: Set and Extract version
         shell: pwsh
-        run: lib/scripts/build.ps1
+        run: lib/scripts/build.ps1 '' "${{ inputs.tag }}"
 
       - name: Apply Patch
         shell: pwsh
@@ -61,11 +61,11 @@ jobs:
         shell: pwsh
 
       - name: Release
-        if: ${{ github.event.inputs.tag != '' }}
+        if: ${{ inputs.tag != '' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
           target_commitish: ${{ github.sha }}
           files: |
             PiliPlus-Purify_windows_*.zip

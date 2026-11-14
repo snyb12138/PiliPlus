@@ -1,9 +1,18 @@
 param(
-    [string]$Arg = ''
+    [string]$Arg = '',
+    [string]$ReleaseTag = ''
 )
 
 try {
     $versionName = $null
+    $releaseVersionName = $null
+
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseTag)) {
+        if ($ReleaseTag -notmatch '^purify-v(\d+\.\d+\.\d+)$') {
+            throw "invalid Purify release tag: $ReleaseTag"
+        }
+        $releaseVersionName = $matches[1]
+    }
 
     $versionCode = [int](git rev-list --count HEAD).Trim()
 
@@ -11,7 +20,12 @@ try {
 
     $updatedContent = foreach ($line in (Get-Content -Path 'pubspec.yaml' -Encoding UTF8)) {
         if ($line -match '^\s*version:\s*([\d\.]+)') {
-            $versionName = $matches[1]
+            $versionName = if ($null -ne $releaseVersionName) {
+                $releaseVersionName
+            }
+            else {
+                $matches[1]
+            }
             if ($Arg -eq 'android') {
                 $versionName += '-' + $commitHash.Substring(0, 9)
             }
