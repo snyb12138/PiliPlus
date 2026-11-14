@@ -183,41 +183,38 @@ class DanmakuSpamDetector {
       )
       ..add(_SpamEvent(progress: progress, sender: sender));
 
-    final globalEvents = events
-        .where(
-          (event) =>
-              progress - event.progress >= 0 &&
-              progress - event.progress <= globalWindowMilliseconds,
-        )
-        .toList(growable: false);
-    final sameSenderCount = events
-        .where(
-          (event) =>
-              event.sender == sender &&
-              progress - event.progress >= 0 &&
-              progress - event.progress <= senderWindowMilliseconds,
-        )
-        .length;
+    var globalCount = 0;
+    var sameSenderCount = 0;
+    var globalWindowStart = progress;
+    var sameSenderWindowStart = progress;
+    for (final event in events) {
+      final age = progress - event.progress;
+      if (age < 0) continue;
+      if (age <= globalWindowMilliseconds) {
+        globalCount += 1;
+        globalWindowStart = min(globalWindowStart, event.progress);
+      }
+      if (event.sender == sender && age <= senderWindowMilliseconds) {
+        sameSenderCount += 1;
+        sameSenderWindowStart = min(sameSenderWindowStart, event.progress);
+      }
+    }
     final sameSenderHit = sameSenderCount >= senderWindowThreshold;
-    final globalHit = globalEvents.length >= globalWindowThreshold;
+    final globalHit = globalCount >= globalWindowThreshold;
     if (!sameSenderHit && !globalHit) return null;
 
     final reason = sameSenderHit
         ? DanmakuSpamReason.sameSenderWindow
         : DanmakuSpamReason.globalWindow;
-    final relevantEvents = sameSenderHit
-        ? events.where((event) => event.sender == sender)
-        : globalEvents;
-    final windowStart = relevantEvents.fold<int>(
-      progress,
-      (value, event) => min(value, event.progress),
-    );
+    final windowStart = sameSenderHit
+        ? sameSenderWindowStart
+        : globalWindowStart;
 
     return DanmakuSpamMatch(
       reason: reason,
       normalizedKey: normalized.normalizedKey,
       repeatBaseKey: normalized.repeatBaseKey,
-      countAtHit: globalEvents.length,
+      countAtHit: globalCount,
       sameSenderCountAtHit: sameSenderCount,
       windowStartProgress: windowStart,
       windowEndProgress: progress,

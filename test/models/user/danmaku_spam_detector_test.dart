@@ -79,10 +79,10 @@ void main() {
 
   test('same sender ten second window wins when both conditions match', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector
-      ..inspect(content: '好耶', progress: 0, sender: 'same')
-      ..inspect(content: '好耶', progress: 2000, sender: 'same');
-    final hit = detector.inspect(
+    final hit = (detector
+          ..inspect(content: '好耶', progress: 0, sender: 'same')
+          ..inspect(content: '好耶', progress: 2000, sender: 'same'))
+        .inspect(
       content: '好耶',
       progress: 4000,
       sender: 'same',
@@ -95,10 +95,10 @@ void main() {
 
   test('same sender rule can trigger outside the global window', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector
-      ..inspect(content: '来了', progress: 0, sender: 'same')
-      ..inspect(content: '来了', progress: 6000, sender: 'same');
-    final hit = detector.inspect(
+    final hit = (detector
+          ..inspect(content: '来了', progress: 0, sender: 'same')
+          ..inspect(content: '来了', progress: 6000, sender: 'same'))
+        .inspect(
       content: '来了',
       progress: 9000,
       sender: 'same',
@@ -149,13 +149,12 @@ void main() {
 
   test('reset clears window state without leaking across video sessions', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
-    detector
-      ..inspect(content: '测试', progress: 0, sender: 'a')
-      ..inspect(content: '测试', progress: 1000, sender: 'b')
-      ..reset(keepAllowances: false);
-
     expect(
-      detector.inspect(content: '测试', progress: 2000, sender: 'c'),
+      (detector
+            ..inspect(content: '测试', progress: 0, sender: 'a')
+            ..inspect(content: '测试', progress: 1000, sender: 'b')
+            ..reset(keepAllowances: false))
+          .inspect(content: '测试', progress: 2000, sender: 'c'),
       isNull,
     );
   });
