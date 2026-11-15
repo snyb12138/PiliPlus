@@ -16,6 +16,7 @@ import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
@@ -418,6 +419,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late RuleFilter filters = Pref.danmakuFilterRule;
   late DanmakuAssistantConfig danmakuAssistantConfig =
       Pref.danmakuAssistantConfig;
+  final TemplateSpamTracker danmakuTemplateSpamTracker =
+      TemplateSpamTracker();
   final List<DanmakuAssistantRecord> danmakuAssistantSamples = [];
   final List<DanmakuAssistantRecord> danmakuAssistantHits = [];
   final Map<DanmakuAssistantKind, int> danmakuAssistantReasonCounts = {};
@@ -442,6 +445,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void beginDanmakuAssistantSession(int cid) {
+    danmakuTemplateSpamTracker.activateCid(cid);
     if (_danmakuAssistantCid == cid) return;
     _danmakuAssistantCid = cid;
     danmakuSpamAllowedKeys.clear();
@@ -464,6 +468,22 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (!danmakuSpamAllowedKeys.remove(key)) return;
     clearDanmakuAssistantRecords();
     reloadDanmakuFilters();
+  }
+
+  bool blockDanmakuSenderLocally(String sender) {
+    if (sender.isEmpty || !filters.dmUid.add(sender)) return false;
+    filters.count++;
+    GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filters);
+    reloadDanmakuFilters();
+    return true;
+  }
+
+  bool unblockDanmakuSenderLocally(String sender) {
+    if (!filters.dmUid.remove(sender)) return false;
+    if (filters.count > 0) filters.count--;
+    GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filters);
+    reloadDanmakuFilters();
+    return true;
   }
 
   void recordDanmakuAssistantBatch({

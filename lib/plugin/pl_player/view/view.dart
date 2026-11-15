@@ -85,7 +85,14 @@ import 'package:screen_brightness_platform_interface/screen_brightness_platform_
 
 part 'widgets.dart';
 
-enum _DanmakuAssistantQuickAction { gentle, absolute, openAssistant }
+enum _DanmakuAssistantQuickAction {
+  copy,
+  allowCurrentVideo,
+  blockSender,
+  gentle,
+  absolute,
+  openAssistant,
+}
 
 class PLVideoPlayer extends StatefulWidget {
   const PLVideoPlayer({
@@ -1144,7 +1151,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     }
   }
 
-  Future<void> _showDanmakuAssistantQuickActions(String rawContent) async {
+  Future<void> _showDanmakuAssistantQuickActions(
+    String rawContent,
+    VideoDanmaku extra,
+  ) async {
     final content = rawContent.trim();
     if (content.isEmpty) return;
 
@@ -1152,7 +1162,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     final action = await showDialog<_DanmakuAssistantQuickAction>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
-        title: const Text('屏蔽这条弹幕'),
+        title: const Text('弹幕快捷操作'),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -1161,6 +1171,37 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.copy_outlined),
+            title: const Text('复制弹幕'),
+            onTap: () => Navigator.pop(
+              dialogContext,
+              _DanmakuAssistantQuickAction.copy,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_outlined),
+            title: const Text('本视频放行此内容'),
+            subtitle: const Text('仅当前视频有效，不写入永久规则'),
+            onTap: () => Navigator.pop(
+              dialogContext,
+              _DanmakuAssistantQuickAction.allowCurrentVideo,
+            ),
+          ),
+          ListTile(
+            enabled: extra.mid.isNotEmpty,
+            leading: const Icon(Icons.person_off_outlined),
+            title: const Text('屏蔽发送者'),
+            subtitle: Text(
+              extra.mid.isEmpty ? '无法取得稳定的发送者标识' : '加入本机全局弹幕发送者屏蔽名单',
+            ),
+            onTap: extra.mid.isEmpty
+                ? null
+                : () => Navigator.pop(
+                    dialogContext,
+                    _DanmakuAssistantQuickAction.blockSender,
+                  ),
           ),
           ListTile(
             leading: const Icon(Icons.filter_alt_outlined),
@@ -1193,6 +1234,55 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     );
 
     switch (action) {
+      case _DanmakuAssistantQuickAction.copy:
+        Utils.copyText(content);
+      case _DanmakuAssistantQuickAction.allowCurrentVideo:
+        plPlayerController.allowDanmakuSpamForCurrentVideo(content);
+        SmartDialog.showToast('已在当前视频放行此内容');
+      case _DanmakuAssistantQuickAction.blockSender:
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('确认屏蔽发送者？'),
+            content: Text(
+              '发送者标识：${extra.mid}\n\n'
+              '确认后，该发送者的弹幕将在本机全局隐藏。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('屏蔽'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+        final added = plPlayerController.blockDanmakuSenderLocally(extra.mid);
+        if (!added) {
+          SmartDialog.showToast('该发送者已在屏蔽名单中');
+          return;
+        }
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (messenger == null) {
+          SmartDialog.showToast('已屏蔽该发送者');
+          return;
+        }
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text('已屏蔽该发送者'),
+              action: SnackBarAction(
+                label: '撤销',
+                onPressed: () => plPlayerController
+                    .unblockDanmakuSenderLocally(extra.mid),
+              ),
+            ),
+          );
       case _DanmakuAssistantQuickAction.gentle:
         final added = plPlayerController.addDanmakuAssistantTextRule(
           content,
@@ -2365,6 +2455,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                 ),
                 onTap: () => _showDanmakuAssistantQuickActions(
                   item.content.text,
+                  extra,
                 ),
               ),
               Stack(

@@ -7,9 +7,10 @@ keyword, regular-expression, and sender block lists.
 Processing order:
 
 1. Existing explicit user and assistant rules.
-2. `DanmakuSpamDetector` on the unmerged raw stream.
-3. PiliPlus exact-text merge.
-4. Rendering and Purify preview records.
+2. `TemplateSpamTracker` on whole-message count/relative-time candidates.
+3. `DanmakuSpamDetector` on the unmerged raw stream.
+4. PiliPlus exact-text merge.
+5. Rendering and Purify preview records.
 
 The detector folds full-width ASCII, removes zero-width bypass characters,
 normalizes whitespace, removes whitespace between CJK characters, and then
@@ -21,6 +22,14 @@ of 1–12 code points.
 All counters include the current danmaku. Sender hashes are salted and valid
 only for the current process. They must not be persisted, exported, or used for
 cross-session statistics.
+
+`TemplateSpamTracker` only accepts a whole message such as `5000+` or
+`5分钟前`; a normal sentence containing the same token is ignored. Count and
+time variants share a template key while time units remain distinct. The
+global five-second and same-sender ten-second windows are left-closed and
+right-open. Decisions are keyed by the source danmaku id so segment reloads
+and seeking do not count an event twice. Up to three cid states are retained
+using LRU order, and every sender token remains process-local.
 
 The internal detector also catches long character runs embedded in otherwise
 different text, such as an ordinary prefix followed by five repeated ASCII

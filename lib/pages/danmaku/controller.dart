@@ -6,6 +6,7 @@ import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -123,14 +124,51 @@ class PlDanmakuController {
 
         if (assistant.blockRepeatedSpam &&
             !_plPlayerController.isDanmakuSpamAllowed(element.content)) {
-          final spam = _spamDetector.inspect(
-            content: element.content,
-            progress: element.progress,
-            sender: element.midHash.isEmpty
-                ? 'unknown:${element.idStr}'
-                : element.midHash,
-          );
-          if (spam != null) {
+          final sender = element.midHash.isEmpty
+              ? 'unknown:${element.idStr}'
+              : element.midHash;
+          final templateSpam = _plPlayerController.danmakuTemplateSpamTracker
+              .inspect(
+                cid: _cid,
+                eventId: element.idStr,
+                content: element.content,
+                progress: element.progress,
+                sender: sender,
+              );
+          final spam = templateSpam == null
+              ? _spamDetector.inspect(
+                  content: element.content,
+                  progress: element.progress,
+                  sender: sender,
+                )
+              : null;
+          if (templateSpam != null) {
+            final sameSender =
+                templateSpam.sameSenderCountAtHit >=
+                TemplateSpamTracker.senderWindowThreshold;
+            final countDetail = sameSender
+                ? '同一发送者 10 秒内第 '
+                      '${templateSpam.sameSenderCountAtHit} 条'
+                : '5 秒内第 ${templateSpam.countAtHit} 条';
+            final span =
+                (templateSpam.windowEndProgress -
+                        templateSpam.windowStartProgress) /
+                    1000;
+            match = DanmakuAssistantMatch(
+              kind: DanmakuAssistantKind.repeatedSpam,
+              reason:
+                  '${templateSpam.reason.label}（命中模板：'
+                  '${templateSpam.templateKey}，$countDetail，'
+                  '跨度 ${span.toStringAsFixed(1)} 秒）',
+              countAtHit: templateSpam.countAtHit,
+              sameSenderCountAtHit: templateSpam.sameSenderCountAtHit,
+              windowStartProgress: templateSpam.windowStartProgress,
+              windowEndProgress: templateSpam.windowEndProgress,
+              normalizedKey: templateSpam.normalizedText,
+              repeatBaseKey: templateSpam.templateKey,
+              senderHash: templateSpam.senderHash,
+            );
+          } else if (spam != null) {
             final countDetail = switch (spam.reason) {
               DanmakuSpamReason.globalWindow =>
                 '（5 秒内第 ${spam.countAtHit} 条）',

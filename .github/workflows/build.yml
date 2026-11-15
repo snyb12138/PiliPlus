@@ -101,6 +101,7 @@ jobs:
                     lib/models/user/danmaku_rule.dart \
                     lib/models/user/danmaku_rule_adapter.dart \
                     lib/models/user/danmaku_spam/detector.dart \
+                    lib/models/user/danmaku_spam/template_tracker.dart \
                     lib/models/user/reply_density_detector.dart \
                     lib/models/user/reply_purify.dart \
                     lib/pages/danmaku/controller.dart \
@@ -112,8 +113,10 @@ jobs:
                     lib/pages/video/reply/widgets/purify_hub_card.dart \
                     lib/pages/video/reply/widgets/reply_item_grpc.dart \
                     lib/plugin/pl_player/controller.dart \
+                    lib/plugin/pl_player/view/view.dart \
                     test/models/user/danmaku_assistant_test.dart \
                     test/models/user/danmaku_spam_detector_test.dart \
+                    test/models/user/danmaku_template_spam_tracker_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     test/utils/purify_profile_backup_test.dart \
@@ -123,6 +126,7 @@ jobs:
                     test/utils/purify_profile_backup_test.dart \
                     test/models/user/danmaku_assistant_test.dart \
                     test/models/user/danmaku_spam_detector_test.dart \
+                    test/models/user/danmaku_template_spam_tracker_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     --no-pub

@@ -108,5 +108,37 @@
       "input": "thisisveryinteresting",
       "expectedReason": null
     }
+  ],
+  "templates": [
+    {
+      "caseId": "people-count-fullwidth-plus",
+      "input": "５０００ ＋",
+      "expectedReason": "peopleCount",
+      "expectedTemplateKey": "<count>+"
+    },
+    {
+      "caseId": "relative-minutes",
+      "input": "5 分钟前",
+      "expectedReason": "relativeTime",
+      "expectedTemplateKey": "<n>分钟前"
+    },
+    {
+      "caseId": "relative-hours-keeps-unit",
+      "input": "5小时前",
+      "expectedReason": "relativeTime",
+      "expectedTemplateKey": "<n>小时前"
+    },
+    {
+      "caseId": "people-count-in-sentence-allowed",
+      "input": "在线人数达到5000+",
+      "expectedReason": null,
+      "expectedTemplateKey": null
+    },
+    {
+      "caseId": "relative-time-in-sentence-allowed",
+      "input": "我5分钟前刚看到",
+      "expectedReason": null,
+      "expectedTemplateKey": null
+    }
   ]
 }
