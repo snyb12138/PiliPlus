@@ -4,6 +4,21 @@ import 'dart:io';
 import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+TemplateSpamMatch? _inspect(
+  TemplateSpamTracker tracker, {
+  required int cid,
+  required String eventId,
+  required String content,
+  required int progress,
+  required String sender,
+}) => tracker.inspect(
+  cid: cid,
+  eventId: eventId,
+  content: content,
+  progress: progress,
+  sender: sender,
+);
+
 void main() {
   final vectors = jsonDecode(
     File('test_vectors/danmaku_spam/v1.json').readAsStringSync(),
@@ -79,22 +94,24 @@ void main() {
   test('five-second boundary is left-closed and right-open', () {
     final tracker = TemplateSpamTracker(processSalt: 1);
 
-    tracker
-      ..inspect(
-        cid: 1,
-        eventId: '1',
-        content: '5000+',
-        progress: 0,
-        sender: 'a',
-      )
-      ..inspect(
-        cid: 1,
-        eventId: '2',
-        content: '6000+',
-        progress: 1000,
-        sender: 'b',
-      );
-    final boundary = tracker.inspect(
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '1',
+      content: '5000+',
+      progress: 0,
+      sender: 'a',
+    );
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '2',
+      content: '6000+',
+      progress: 1000,
+      sender: 'b',
+    );
+    final boundary = _inspect(
+      tracker,
       cid: 1,
       eventId: '3',
       content: '7000+',
@@ -108,22 +125,24 @@ void main() {
   test('same sender window groups equal and different numeric versions', () {
     final tracker = TemplateSpamTracker(processSalt: 1);
 
-    tracker
-      ..inspect(
-        cid: 1,
-        eventId: '1',
-        content: '5分钟前',
-        progress: 0,
-        sender: 'same',
-      )
-      ..inspect(
-        cid: 1,
-        eventId: '2',
-        content: '5分钟前',
-        progress: 6000,
-        sender: 'same',
-      );
-    final hit = tracker.inspect(
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '1',
+      content: '5分钟前',
+      progress: 0,
+      sender: 'same',
+    );
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '2',
+      content: '5分钟前',
+      progress: 6000,
+      sender: 'same',
+    );
+    final hit = _inspect(
+      tracker,
       cid: 1,
       eventId: '3',
       content: '6分钟前',
@@ -140,22 +159,24 @@ void main() {
   test('ten-second sender boundary starts a new window', () {
     final tracker = TemplateSpamTracker(processSalt: 1);
 
-    tracker
-      ..inspect(
-        cid: 1,
-        eventId: '1',
-        content: '5分钟前',
-        progress: 0,
-        sender: 'same',
-      )
-      ..inspect(
-        cid: 1,
-        eventId: '2',
-        content: '5分钟前',
-        progress: 6000,
-        sender: 'same',
-      );
-    final boundary = tracker.inspect(
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '1',
+      content: '5分钟前',
+      progress: 0,
+      sender: 'same',
+    );
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '2',
+      content: '5分钟前',
+      progress: 6000,
+      sender: 'same',
+    );
+    final boundary = _inspect(
+      tracker,
       cid: 1,
       eventId: '3',
       content: '6分钟前',
@@ -169,36 +190,40 @@ void main() {
   test('reloaded event returns its decision without incrementing counts', () {
     final tracker = TemplateSpamTracker(processSalt: 1);
 
-    tracker
-      ..inspect(
-        cid: 1,
-        eventId: '1',
-        content: '5000+',
-        progress: 0,
-        sender: 'a',
-      )
-      ..inspect(
-        cid: 1,
-        eventId: '2',
-        content: '6000+',
-        progress: 1000,
-        sender: 'b',
-      );
-    final first = tracker.inspect(
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '1',
+      content: '5000+',
+      progress: 0,
+      sender: 'a',
+    );
+    _inspect(
+      tracker,
+      cid: 1,
+      eventId: '2',
+      content: '6000+',
+      progress: 1000,
+      sender: 'b',
+    );
+    final first = _inspect(
+      tracker,
       cid: 1,
       eventId: '3',
       content: '7000+',
       progress: 2000,
       sender: 'c',
     );
-    final replay = tracker.inspect(
+    final replay = _inspect(
+      tracker,
       cid: 1,
       eventId: '3',
       content: '7000+',
       progress: 2000,
       sender: 'c',
     );
-    final fourth = tracker.inspect(
+    final fourth = _inspect(
+      tracker,
       cid: 1,
       eventId: '4',
       content: '8000+',
@@ -254,7 +279,8 @@ void main() {
       ..activateCid(3)
       ..activateCid(1);
 
-    tracker.inspect(
+    _inspect(
+      tracker,
       cid: 4,
       eventId: 'late',
       content: '5000+',

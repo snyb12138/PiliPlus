@@ -1232,6 +1232,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ],
       ),
     );
+    if (!mounted) return;
 
     switch (action) {
       case _DanmakuAssistantQuickAction.copy:
