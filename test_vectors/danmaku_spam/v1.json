@@ -87,6 +87,26 @@
       "caseId": "mixed-symbol-five",
       "input": "+-*/=",
       "expectedReason": "mixedSymbols"
+    },
+    {
+      "caseId": "embedded-ascii-run-after-place-name",
+      "input": "西安hhhhh",
+      "expectedReason": "embeddedCharacterRun"
+    },
+    {
+      "caseId": "embedded-ascii-run-after-number",
+      "input": "4.66JJJJJJJJJJJJJ",
+      "expectedReason": "embeddedCharacterRun"
+    },
+    {
+      "caseId": "keyboard-mash-low-vowel-ratio",
+      "input": "khjhhhhkhjhmoykohp6jhjhmh",
+      "expectedReason": "keyboardMash"
+    },
+    {
+      "caseId": "normal-long-latin-text-allowed",
+      "input": "thisisveryinteresting",
+      "expectedReason": null
     }
   ]
 }

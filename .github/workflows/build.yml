@@ -4,6 +4,7 @@ on:
     push:
         branches:
             - "purify-v*"
+            - "fix/danmaku-spam-noise"
 
     # pull_request:
     #     types:
@@ -141,7 +142,7 @@ jobs:
               if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
               shell: bash
               run: |
-                  if [[ "${{ github.event_name }}" == "push" ]]; then
+                  if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == purify-v* ]]; then
                     echo "release_tag=${{ github.ref_name }}" >> "$GITHUB_ENV"
                   else
                     echo "release_tag=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
@@ -214,7 +215,7 @@ jobs:
             tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
 
     win_x64:
-        if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_win_x64 == 'true' }}
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref_name, 'purify-v')) || (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_win_x64 == 'true' }}
         uses: ./.github/workflows/win_x64.yml
         permissions: write-all
         with:

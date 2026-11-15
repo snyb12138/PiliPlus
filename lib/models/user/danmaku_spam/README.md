@@ -22,6 +22,14 @@ All counters include the current danmaku. Sender hashes are salted and valid
 only for the current process. They must not be persisted, exported, or used for
 cross-session statistics.
 
+The internal detector also catches long character runs embedded in otherwise
+different text, such as an ordinary prefix followed by five repeated ASCII
+letters. Expressive CJK characters keep the existing six-character threshold.
+Long ASCII-only strings of at least 16 code points are classified as probable
+keyboard mashing only when they contain at least 12 letters and no more than
+20 percent vowels. Short Bilibili identifiers therefore remain outside this
+heuristic.
+
 The thresholds and test vectors are original to this project. Public filter
 projects informed the product and engineering approach only; no third-party
 rule text is copied into this module.

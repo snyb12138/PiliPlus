@@ -8,6 +8,8 @@ enum DanmakuSpamReason {
   expressiveCharacter('语气字符重复'),
   repeatedCharacter('单字符重复'),
   repeatedPhrase('短句周期重复'),
+  embeddedCharacterRun('局部字符连打'),
+  keyboardMash('疑似键盘乱按'),
   globalWindow('短句集中刷屏'),
   sameSenderWindow('同用户重复刷屏');
 
@@ -83,6 +85,7 @@ class DanmakuSpamDetector {
     r'^[^\p{L}\p{N}\s]+$',
     unicode: true,
   );
+  static final RegExp _asciiAlphaNumericOnly = RegExp(r'^[a-z0-9]+$');
   static const Set<String> _expressiveCharacters = {
     '哈',
     '呵',
@@ -275,6 +278,13 @@ class DanmakuSpamDetector {
       if (runes.length >= 5) return DanmakuSpamReason.mixedSymbols;
     }
 
+    if (_hasEmbeddedCharacterRun(runes)) {
+      return DanmakuSpamReason.embeddedCharacterRun;
+    }
+    if (_looksLikeKeyboardMash(key, runes)) {
+      return DanmakuSpamReason.keyboardMash;
+    }
+
     if (normalized.repeatCount < 2) return null;
     if (normalized.periodLength == 1) {
       final unit = normalized.repeatBaseKey;
@@ -292,6 +302,51 @@ class DanmakuSpamDetector {
       return DanmakuSpamReason.repeatedPhrase;
     }
     return null;
+  }
+
+  static bool _hasEmbeddedCharacterRun(List<int> runes) {
+    if (runes.length < 6) return false;
+    var runLength = 1;
+    for (var i = 1; i < runes.length; i++) {
+      if (runes[i] == runes[i - 1]) {
+        runLength += 1;
+      } else {
+        if (runLength >= _embeddedRunThreshold(runes[i - 1])) return true;
+        runLength = 1;
+      }
+    }
+    return runLength < runes.length &&
+        runLength >= _embeddedRunThreshold(runes.last);
+  }
+
+  static int _embeddedRunThreshold(int rune) {
+    final asciiLetter =
+        (rune >= 0x61 && rune <= 0x7a) ||
+        (rune >= 0x41 && rune <= 0x5a);
+    if (asciiLetter) return 5;
+    if (rune >= 0x30 && rune <= 0x39) return 6;
+    if (_expressiveCharacters.contains(String.fromCharCode(rune))) return 6;
+    return 4;
+  }
+
+  static bool _looksLikeKeyboardMash(String key, List<int> runes) {
+    if (runes.length < 16 || !_asciiAlphaNumericOnly.hasMatch(key)) {
+      return false;
+    }
+    var letters = 0;
+    var vowels = 0;
+    for (final rune in runes) {
+      if (rune < 0x61 || rune > 0x7a) continue;
+      letters += 1;
+      if (rune == 0x61 ||
+          rune == 0x65 ||
+          rune == 0x69 ||
+          rune == 0x6f ||
+          rune == 0x75) {
+        vowels += 1;
+      }
+    }
+    return letters >= 12 && vowels * 5 <= letters;
   }
 
   static int _minimumPeriod(List<int> runes) {
