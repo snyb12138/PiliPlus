@@ -10,6 +10,8 @@ import 'package:PiliPlus/pages/rank/controller.dart';
 import 'package:PiliPlus/pages/rank/view.dart';
 import 'package:PiliPlus/pages/rcmd/controller.dart';
 import 'package:PiliPlus/pages/rcmd/view.dart';
+import 'package:PiliPlus/pages/video_purify/controller.dart';
+import 'package:PiliPlus/pages/video_purify/view.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -20,7 +22,7 @@ enum HomeTabType implements EnumWithLabel {
   rank('分区'),
   bangumi('番剧'),
   cinema('影视'),
-  ;
+  videoPurify('视频净化');
 
   @override
   final String label;
@@ -33,6 +35,7 @@ enum HomeTabType implements EnumWithLabel {
     HomeTabType.rank => Get.find<RankController>,
     HomeTabType.bangumi ||
     HomeTabType.cinema => () => Get.find<PgcController>(tag: name),
+    HomeTabType.videoPurify => Get.find<VideoPurifyHomeController>,
   };
 
   Widget get page => switch (this) {
@@ -42,5 +45,6 @@ enum HomeTabType implements EnumWithLabel {
     HomeTabType.rank => const RankPage(),
     HomeTabType.bangumi => const PgcPage(tabType: HomeTabType.bangumi),
     HomeTabType.cinema => const PgcPage(tabType: HomeTabType.cinema),
+    HomeTabType.videoPurify => const VideoPurifyPage(embedded: true),
   };
 }

@@ -6,6 +6,7 @@ import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
@@ -16,11 +17,8 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:path/path.dart' as path;
 
 class PlDanmakuController {
-  PlDanmakuController(
-    this._cid,
-    this._plPlayerController,
-    this._isFileSource,
-  ) : _mergeDanmaku = _plPlayerController.mergeDanmaku;
+  PlDanmakuController(this._cid, this._plPlayerController, this._isFileSource)
+    : _mergeDanmaku = _plPlayerController.mergeDanmaku;
 
   final int _cid;
   final PlPlayerController _plPlayerController;
@@ -75,13 +73,13 @@ class PlDanmakuController {
       if (response.state == 1) {
         _plPlayerController.dmState.add(_cid);
       }
-      handleDanmaku(response.elems);
+      handleDanmaku(response.elems, segmentIndex: segmentIndex);
     } else {
       _requestedSeg.remove(segmentIndex);
     }
   }
 
-  void handleDanmaku(List<DanmakuElem> elems) {
+  void handleDanmaku(List<DanmakuElem> elems, {int? segmentIndex}) {
     if (elems.isEmpty) return;
     final uniques = HashMap<String, DanmakuElem>();
     final samples = <DanmakuAssistantRecord>[];
@@ -90,17 +88,35 @@ class PlDanmakuController {
     final filters = _plPlayerController.filters;
     final shouldFilter = filters.count != 0;
     final assistant = _plPlayerController.danmakuAssistantConfig;
+    final whitelist = assistant.noiseWhitelist
+        .map(DanmakuNoisePolicy.key)
+        .toSet();
     final orderedElems = elems.length < 2
         ? elems
         : (List<DanmakuElem>.of(elems)
             ..sort((a, b) => a.progress.compareTo(b.progress)));
-    for (final element in orderedElems) {
+    const segmentDuration = 360000;
+    final isolation = assistant.strictNoiseFilter
+        ? DanmakuNoisePolicy.isolatedFlags(
+            orderedElems
+                .map((item) => (content: item.content, progress: item.progress))
+                .toList(growable: false),
+            coverageStart: segmentIndex == null
+                ? 0
+                : segmentIndex * segmentDuration,
+            coverageEnd: segmentIndex == null
+                ? _plPlayerController.durationInMilliseconds
+                : (segmentIndex + 1) * segmentDuration,
+          )
+        : const <bool?>[];
+    for (var index = 0; index < orderedElems.length; index++) {
+      final element = orderedElems[index];
       if (_isLogin) {
         element.isSelf = element.midHash == _plPlayerController.midHash;
       }
 
       if (!element.isSelf) {
-        var match = assistant.match(element.content);
+        var match = assistant.match(element.content, includeAutomatic: false);
         if (match != null) {
           final record = DanmakuAssistantRecord(
             content: element.content,
@@ -113,17 +129,39 @@ class PlDanmakuController {
         }
 
         if (shouldFilter && filters.remove(element)) {
-          samples.add(
-            DanmakuAssistantRecord(
-              content: element.content,
-              progress: element.progress,
+          final record = DanmakuAssistantRecord(
+            content: element.content,
+            progress: element.progress,
+            match: const DanmakuAssistantMatch(
+              kind: DanmakuAssistantKind.traditionalRule,
+              reason: '传统关键词/正则/发送者规则',
             ),
           );
+          samples.add(record);
+          hits.add(record);
           continue;
         }
 
-        if (assistant.blockRepeatedSpam &&
-            !_plPlayerController.isDanmakuSpamAllowed(element.content)) {
+        final allowed =
+            _plPlayerController.isDanmakuSpamAllowed(element.content) ||
+            whitelist.contains(DanmakuNoisePolicy.key(element.content));
+        if (!allowed) {
+          match = assistant.match(element.content);
+          if (match == null && assistant.strictNoiseFilter) {
+            final reasons = DanmakuNoisePolicy.reasons(
+              element.content,
+              isolated: isolation[index],
+            );
+            if (reasons.isNotEmpty) {
+              match = DanmakuAssistantMatch(
+                kind: DanmakuAssistantKind.strictNoise,
+                reason: '激进过滤：${reasons.join('；')}',
+              );
+            }
+          }
+        }
+
+        if (match == null && assistant.blockRepeatedSpam && !allowed) {
           final sender = element.midHash.isEmpty
               ? 'unknown:${element.idStr}'
               : element.midHash;
@@ -140,6 +178,7 @@ class PlDanmakuController {
                   content: element.content,
                   progress: element.progress,
                   sender: sender,
+                  compactCharacterRuns: true,
                 )
               : null;
           if (templateSpam != null) {
@@ -152,8 +191,8 @@ class PlDanmakuController {
                 : '5 秒内第 ${templateSpam.countAtHit} 条';
             final span =
                 (templateSpam.windowEndProgress -
-                        templateSpam.windowStartProgress) /
-                    1000;
+                    templateSpam.windowStartProgress) /
+                1000;
             match = DanmakuAssistantMatch(
               kind: DanmakuAssistantKind.repeatedSpam,
               reason:
@@ -170,8 +209,7 @@ class PlDanmakuController {
             );
           } else if (spam != null) {
             final countDetail = switch (spam.reason) {
-              DanmakuSpamReason.globalWindow =>
-                '（5 秒内第 ${spam.countAtHit} 条）',
+              DanmakuSpamReason.globalWindow => '（5 秒内第 ${spam.countAtHit} 条）',
               DanmakuSpamReason.sameSenderWindow =>
                 '（同一发送者 10 秒内第 ${spam.sameSenderCountAtHit} 条）',
               _ => '',

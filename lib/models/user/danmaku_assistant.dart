@@ -1,3 +1,5 @@
+import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+
 enum DanmakuAssistantKind {
   absolute('绝对屏蔽'),
   gentle('温和屏蔽'),
@@ -5,7 +7,9 @@ enum DanmakuAssistantKind {
   timeStamp('时间打卡'),
   peopleCount('人数刷屏'),
   shortCheckIn('短打卡'),
-  repeatedSpam('重复刷屏');
+  repeatedSpam('重复刷屏'),
+  strictNoise('激进乱码过滤'),
+  traditionalRule('传统弹幕规则');
 
   const DanmakuAssistantKind(this.label);
 
@@ -59,6 +63,9 @@ class DanmakuAssistantConfig {
     required this.blockPeopleCounts,
     required this.blockShortCheckIns,
     required this.blockRepeatedSpam,
+    this.strictNoiseFilter = false,
+    this.noiseWhitelist = const [],
+    this.learningSamples = const [],
   });
 
   factory DanmakuAssistantConfig.defaults() => const DanmakuAssistantConfig(
@@ -96,14 +103,8 @@ class DanmakuAssistantConfig {
     return DanmakuAssistantConfig(
       absoluteRules: readRules('absoluteRules', defaults.absoluteRules),
       gentleRules: readRules('gentleRules', defaults.gentleRules),
-      blockDateStamps: readBool(
-        'blockDateStamps',
-        defaults.blockDateStamps,
-      ),
-      blockTimeStamps: readBool(
-        'blockTimeStamps',
-        defaults.blockTimeStamps,
-      ),
+      blockDateStamps: readBool('blockDateStamps', defaults.blockDateStamps),
+      blockTimeStamps: readBool('blockTimeStamps', defaults.blockTimeStamps),
       blockPeopleCounts: readBool(
         'blockPeopleCounts',
         defaults.blockPeopleCounts,
@@ -116,6 +117,11 @@ class DanmakuAssistantConfig {
         'blockRepeatedSpam',
         defaults.blockRepeatedSpam,
       ),
+      strictNoiseFilter: readBool('strictNoiseFilter', false),
+      noiseWhitelist: readRules('noiseWhitelist', const []),
+      learningSamples: DanmakuLearningSample.fromStorage(
+        raw['learningSamples'],
+      ),
     );
   }
 
@@ -126,6 +132,9 @@ class DanmakuAssistantConfig {
   final bool blockPeopleCounts;
   final bool blockShortCheckIns;
   final bool blockRepeatedSpam;
+  final bool strictNoiseFilter;
+  final List<String> noiseWhitelist;
+  final List<DanmakuLearningSample> learningSamples;
 
   static final RegExp _dateStamp = RegExp(
     r'^(?:(?:20\d{2}\s*[年./-]\s*)?\d{1,2}\s*(?:月|[./-])\s*\d{1,2}\s*(?:日|号)?|20\d{2}\s*(?:年|[./-])\s*\d{1,2}\s*月?)(?:\s*(?:[01]?\d|2[0-3])\s*(?:[:时点]\s*[0-5]?\d\s*分?)?)?(?:\s+\d{1,7}\s*人)?(?:\s*(?:前来)?(?:打卡|签到|留名|考古|探访古迹|到此一游))?$',
@@ -144,7 +153,7 @@ class DanmakuAssistantConfig {
     caseSensitive: false,
   );
 
-  DanmakuAssistantMatch? match(String content) {
+  DanmakuAssistantMatch? match(String content, {bool includeAutomatic = true}) {
     final normalized = content.trim();
     if (normalized.isEmpty) return null;
 
@@ -170,6 +179,7 @@ class DanmakuAssistantConfig {
       }
     }
 
+    if (!includeAutomatic) return null;
     if (blockDateStamps && _dateStamp.hasMatch(normalized)) {
       return const DanmakuAssistantMatch(
         kind: DanmakuAssistantKind.dateStamp,
@@ -205,6 +215,9 @@ class DanmakuAssistantConfig {
     bool? blockPeopleCounts,
     bool? blockShortCheckIns,
     bool? blockRepeatedSpam,
+    bool? strictNoiseFilter,
+    List<String>? noiseWhitelist,
+    List<DanmakuLearningSample>? learningSamples,
   }) => DanmakuAssistantConfig(
     absoluteRules: absoluteRules ?? this.absoluteRules,
     gentleRules: gentleRules ?? this.gentleRules,
@@ -213,10 +226,13 @@ class DanmakuAssistantConfig {
     blockPeopleCounts: blockPeopleCounts ?? this.blockPeopleCounts,
     blockShortCheckIns: blockShortCheckIns ?? this.blockShortCheckIns,
     blockRepeatedSpam: blockRepeatedSpam ?? this.blockRepeatedSpam,
+    strictNoiseFilter: strictNoiseFilter ?? this.strictNoiseFilter,
+    noiseWhitelist: noiseWhitelist ?? this.noiseWhitelist,
+    learningSamples: learningSamples ?? this.learningSamples,
   );
 
   Map<String, Object> toStorage() => {
-    'version': 2,
+    'version': 3,
     'absoluteRules': absoluteRules,
     'gentleRules': gentleRules,
     'blockDateStamps': blockDateStamps,
@@ -224,5 +240,8 @@ class DanmakuAssistantConfig {
     'blockPeopleCounts': blockPeopleCounts,
     'blockShortCheckIns': blockShortCheckIns,
     'blockRepeatedSpam': blockRepeatedSpam,
+    'strictNoiseFilter': strictNoiseFilter,
+    'noiseWhitelist': noiseWhitelist,
+    'learningSamples': learningSamples.map((item) => item.toStorage()).toList(),
   };
 }

@@ -1895,6 +1895,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     child: PurifyCenterPage(
       showAppBar: false,
       videoSession: _videoReplyController.purifySession,
+      playerController: videoDetailController.plPlayerController,
       onReplyReload: _videoReplyController.onRefresh,
     ),
   );

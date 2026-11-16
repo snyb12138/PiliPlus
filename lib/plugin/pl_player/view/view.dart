@@ -27,6 +27,7 @@ import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
+import 'package:PiliPlus/pages/danmaku_assistant/keyword_dialog.dart';
 import 'package:PiliPlus/pages/live_room/widgets/bottom_control.dart'
     as live_bottom;
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -86,7 +87,7 @@ import 'package:screen_brightness_platform_interface/screen_brightness_platform_
 part 'widgets.dart';
 
 enum _DanmakuAssistantQuickAction {
-  copy,
+  extractKeyword,
   allowCurrentVideo,
   blockSender,
   gentle,
@@ -1173,11 +1174,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.copy_outlined),
-            title: const Text('复制弹幕'),
+            leading: const Icon(Icons.key_outlined),
+            title: const Text('提取弹幕关键词'),
+            subtitle: const Text('编辑或截取文字，确定后加入屏蔽关键词'),
             onTap: () => Navigator.pop(
               dialogContext,
-              _DanmakuAssistantQuickAction.copy,
+              _DanmakuAssistantQuickAction.extractKeyword,
             ),
           ),
           ListTile(
@@ -1223,7 +1225,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           ),
           ListTile(
             leading: const Icon(Icons.tune),
-            title: const Text('打开弹幕屏蔽助手'),
+            title: const Text('打开弹幕净化'),
             onTap: () => Navigator.pop(
               dialogContext,
               _DanmakuAssistantQuickAction.openAssistant,
@@ -1235,8 +1237,19 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     if (!mounted) return;
 
     switch (action) {
-      case _DanmakuAssistantQuickAction.copy:
-        Utils.copyText(content);
+      case _DanmakuAssistantQuickAction.extractKeyword:
+        final keyword = await showDanmakuKeywordDialog(
+          context,
+          content: content,
+        );
+        if (!mounted || keyword == null) return;
+        final added = plPlayerController.addDanmakuAssistantTextRule(
+          keyword,
+          absolute: true,
+          sampleContent: content,
+          sampleProgress: extra.progress,
+        );
+        SmartDialog.showToast(added ? '已加入屏蔽关键词' : '该关键词已存在');
       case _DanmakuAssistantQuickAction.allowCurrentVideo:
         plPlayerController.allowDanmakuSpamForCurrentVideo(content);
         SmartDialog.showToast('已在当前视频放行此内容');
@@ -1288,12 +1301,14 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         final added = plPlayerController.addDanmakuAssistantTextRule(
           content,
           absolute: false,
+          sampleProgress: extra.progress,
         );
         SmartDialog.showToast(added ? '已加入温和屏蔽' : '该规则已存在');
       case _DanmakuAssistantQuickAction.absolute:
         final added = plPlayerController.addDanmakuAssistantTextRule(
           content,
           absolute: true,
+          sampleProgress: extra.progress,
         );
         SmartDialog.showToast(added ? '已加入绝对屏蔽' : '该规则已存在');
       case _DanmakuAssistantQuickAction.openAssistant:
@@ -2455,7 +2470,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   color: Colors.white,
                 ),
                 onTap: () => _showDanmakuAssistantQuickActions(
-                  item.content.text,
+                  extra.originalContent ?? item.content.text,
                   extra,
                 ),
               ),
@@ -2500,7 +2515,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   CustomIcons.player_dm_tip_copy,
                   color: Colors.white,
                 ),
-                onTap: () => Utils.copyText(item.content.text),
+                onTap: () => Utils.copyText(extra.originalContent ?? item.content.text),
               ),
               if (item.content.selfSend)
                 _dmActionItem(

@@ -16,6 +16,8 @@ import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
@@ -419,8 +421,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late RuleFilter filters = Pref.danmakuFilterRule;
   late DanmakuAssistantConfig danmakuAssistantConfig =
       Pref.danmakuAssistantConfig;
-  final TemplateSpamTracker danmakuTemplateSpamTracker =
-      TemplateSpamTracker();
+  final TemplateSpamTracker danmakuTemplateSpamTracker = TemplateSpamTracker();
   final List<DanmakuAssistantRecord> danmakuAssistantSamples = [];
   final List<DanmakuAssistantRecord> danmakuAssistantHits = [];
   final Map<DanmakuAssistantKind, int> danmakuAssistantReasonCounts = {};
@@ -468,6 +469,23 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (!danmakuSpamAllowedKeys.remove(key)) return;
     clearDanmakuAssistantRecords();
     reloadDanmakuFilters();
+  }
+
+  void allowDanmakuGlobally(String content) {
+    if (DanmakuNoisePolicy.isAllowed(
+      content,
+      danmakuAssistantConfig.noiseWhitelist,
+    )) {
+      return;
+    }
+    updateDanmakuAssistantConfig(
+      danmakuAssistantConfig.copyWith(
+        noiseWhitelist: [
+          ...danmakuAssistantConfig.noiseWhitelist,
+          content.trim(),
+        ],
+      ),
+    );
   }
 
   bool blockDanmakuSenderLocally(String sender) {
@@ -542,6 +560,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   bool addDanmakuAssistantTextRule(
     String content, {
     required bool absolute,
+    String? sampleContent,
+    int? sampleProgress,
   }) {
     final rule = content.trim();
     if (rule.isEmpty) return false;
@@ -552,10 +572,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (source.any((item) => item.trim() == rule)) return false;
 
     final rules = List<String>.of(source)..add(rule);
+    final config = absolute
+        ? danmakuAssistantConfig.copyWith(absoluteRules: rules)
+        : danmakuAssistantConfig.copyWith(gentleRules: rules);
     updateDanmakuAssistantConfig(
-      absolute
-          ? danmakuAssistantConfig.copyWith(absoluteRules: rules)
-          : danmakuAssistantConfig.copyWith(gentleRules: rules),
+      config.copyWith(
+        learningSamples: DanmakuLearningSample.collect(
+          config.learningSamples,
+          DanmakuLearningSample(
+            content: sampleContent ?? content,
+            keyword: rule,
+            mode: absolute ? 'contains' : 'exact',
+            progress: sampleProgress,
+          ),
+        ),
+      ),
     );
     return true;
   }
@@ -1098,11 +1129,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     assert(!isLive || seekTo == null);
     await player.open(
-      Media(
-        video,
-        start: seekTo,
-        extras: extras.isEmpty ? null : extras,
-      ),
+      Media(video, start: seekTo, extras: extras.isEmpty ? null : extras),
       play: false,
     );
   }
@@ -1145,10 +1172,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   void _startWakeLockTimer() {
     _wakeLockTimer?.cancel();
-    _wakeLockTimer = Timer(
-      const Duration(milliseconds: 500),
-      _stopWakeLock,
-    );
+    _wakeLockTimer = Timer(const Duration(milliseconds: 500), _stopWakeLock);
   }
 
   void _stopWakeLockTimer() {
@@ -1565,9 +1589,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void onForwardBackward(Duration duration) {
-    seekTo(
-      duration.clamp(Duration.zero, videoPlayerController!.state.duration),
-    ).whenComplete(play);
+    seekTo(duration.clamp(Duration.zero, videoPlayerController!.state.duration))
+        .whenComplete(play);
   }
 
   void doubleTapFuc(DoubleTapType type) {

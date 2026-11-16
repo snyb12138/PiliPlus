@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
-import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
+import 'package:PiliPlus/pages/danmaku_assistant/records.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
-import 'package:PiliPlus/utils/recommend_filter.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:android_file_picker/android_file_picker.dart';
@@ -22,21 +22,20 @@ class PurifyCenterPage extends StatefulWidget {
     this.showAppBar = true,
     this.videoSession,
     this.onReplyReload,
+    this.playerController,
   });
 
   final bool showAppBar;
   final ReplyPurifyVideoSession? videoSession;
   final Future<void> Function()? onReplyReload;
+  final PlPlayerController? playerController;
 
   @override
   State<PurifyCenterPage> createState() => _PurifyCenterPageState();
 }
 
 class _PurifyCenterPageState extends State<PurifyCenterPage> {
-  Future<void> _open(String route) async {
-    await Get.toNamed(route);
-    if (mounted) setState(() {});
-  }
+  bool _showDanmakuRecords = false;
 
   void _restoreDanmakuRegex() {
     if (Pref.danmakuFilterRule.restoreSessionDisabledRegex() && mounted) {
@@ -85,9 +84,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     return showConfirmDialog(
       context: context,
       title: const Text('覆盖现有配置方案？'),
-      content: const Text(
-        '所选目录已有备份，可能来自重新安装前。建议先恢复；继续备份会把当前设置写入该文件。',
-      ),
+      content: const Text('所选目录已有备份，可能来自重新安装前。建议先恢复；继续备份会把当前设置写入该文件。'),
     );
   }
 
@@ -120,9 +117,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
     final confirmed = await showConfirmDialog(
       context: context,
       title: const Text('恢复配置方案？'),
-      content: const Text(
-        '将替换当前通用设置和净化规则；账号、Cookie、历史记录与 WebDAV 密钥不受影响。',
-      ),
+      content: const Text('将替换当前通用设置和净化规则；账号、Cookie、历史记录与 WebDAV 密钥不受影响。'),
     );
     if (!confirmed) return;
     await _restoreProfileFromSelectedDirectory();
@@ -269,7 +264,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
         children: [
           ListTile(
             leading: const Icon(Icons.visibility_outlined),
-            title: const Text('本视频净化记录'),
+            title: const Text('评论净化记录'),
             subtitle: Text(
               '已折叠 ${session.foldedCount} 条 · 已屏蔽 ${session.blockedCount} 条',
             ),
@@ -285,9 +280,9 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
               return ExpansionTile(
                 leading: Icon(
                   items.any(
-                    (item) =>
-                        item.action == ReplyPurifyPreviewAction.blocked,
-                  )
+                        (item) =>
+                            item.action == ReplyPurifyPreviewAction.blocked,
+                      )
                       ? Icons.comments_disabled_outlined
                       : Icons.auto_awesome_outlined,
                 ),
@@ -323,35 +318,30 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
 
   @override
   Widget build(BuildContext context) {
+    Widget content(ReplyPurifyVideoSession? session) {
+      if (widget.playerController case final player?) {
+        return Obx(() {
+          final _ = player.danmakuAssistantRevision.value;
+          return _buildPage(context, session);
+        });
+      }
+      return _buildPage(context, session);
+    }
+
     final session = widget.videoSession;
     if (session != null) {
       return ListenableBuilder(
         listenable: session,
-        builder: (context, _) => _buildPage(context, session),
+        builder: (context, _) => content(session),
       );
     }
-    return _buildPage(context, null);
+    return content(null);
   }
 
-  Widget _buildPage(
-    BuildContext context,
-    ReplyPurifyVideoSession? session,
-  ) {
-    final danmaku = Pref.danmakuAssistantConfig;
-    final ruleCount = danmaku.absoluteRules.length + danmaku.gentleRules.length;
-    final formatCount = [
-      danmaku.blockDateStamps,
-      danmaku.blockTimeStamps,
-      danmaku.blockPeopleCounts,
-      danmaku.blockShortCheckIns,
-      danmaku.blockRepeatedSpam,
-    ].where((enabled) => enabled).length;
-    final replyCount = ReplyGrpc.replyPurifyConfig.mutedUsers.length;
-    final aiFilterLevel = ReplyGrpc.replyPurifyConfig.aiFilterLevel;
-    final videoPurify = RecommendFilter.videoPurifyConfig;
+  Widget _buildPage(BuildContext context, ReplyPurifyVideoSession? session) {
+    final player = widget.playerController;
     final traditionalDanmaku = Pref.danmakuFilterRule;
-    final slowRegexCount =
-        traditionalDanmaku.sessionDisabledRegexRules.length;
+    final slowRegexCount = traditionalDanmaku.sessionDisabledRegexRules.length;
     final rejectedRegexCount = traditionalDanmaku.rejectedRegexRules.length;
     final padding = MediaQuery.viewPaddingOf(context);
 
@@ -360,6 +350,7 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
           ? AppBar(title: const Text('PiliPlus 净化中心'))
           : null,
       body: ListView(
+        key: const PageStorageKey('purify-center-scroll'),
         padding: EdgeInsets.fromLTRB(
           12,
           widget.showAppBar ? 12 : 0,
@@ -367,37 +358,88 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
           padding.bottom + 100,
         ),
         children: [
-          if (session != null) ...[
-            _buildVideoPreview(session),
-            const SizedBox(height: 8),
-            ReplyPurifyHubCard(
-              embedded: true,
-              ignoredForVideoCount: session.ignoredCount,
-              onRestoreIgnoredForVideo: _restoreIgnoredForVideo,
-              undoAction: session.undoAction,
-              onUndoAction: _undoPurifyAction,
-              onPurifyAction: _recordPurifyAction,
-              onChanged: () {
-                if (mounted) setState(() {});
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('净化增强版', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '把评论、弹幕与视频降噪规则集中在一处。所有匹配均在本机完成，不上传内容或屏蔽列表。',
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.visibility_outlined),
+                  title: Text('本视频净化记录'),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text(
+                          '评论净化 ${(session?.foldedCount ?? 0) + (session?.blockedCount ?? 0)}',
+                        ),
+                        selected: !_showDanmakuRecords,
+                        onSelected: (_) =>
+                            setState(() => _showDanmakuRecords = false),
+                      ),
+                      ChoiceChip(
+                        label: Text(
+                          '弹幕净化 ${player?.danmakuAssistantBlockedTotal ?? 0}',
+                        ),
+                        selected: _showDanmakuRecords,
+                        onSelected: (_) =>
+                            setState(() => _showDanmakuRecords = true),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                if (_showDanmakuRecords)
+                  if (player != null)
+                    DanmakuPurifyRecords(controller: player)
+                  else
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('请从视频播放页进入，以查看当前视频弹幕记录。'),
+                    )
+                else if (session != null)
+                  _buildVideoPreview(session)
+                else
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('请从视频播放页进入，以查看当前视频评论记录。'),
+                  ),
+              ],
             ),
           ),
+          const SizedBox(height: 8),
+          ReplyPurifyHubCard(
+            embedded: true,
+            playerController: player,
+            ignoredForVideoCount: session?.ignoredCount ?? 0,
+            onRestoreIgnoredForVideo: _restoreIgnoredForVideo,
+            undoAction: session?.undoAction,
+            onUndoAction: _undoPurifyAction,
+            onPurifyAction: _recordPurifyAction,
+            onChanged: () {
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          if (slowRegexCount > 0 || rejectedRegexCount > 0)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.warning_amber_outlined),
+                title: const Text('正则安全状态'),
+                subtitle: Text(
+                  '本进程停用慢规则 $slowRegexCount 条；'
+                  '拒绝高风险规则 $rejectedRegexCount 条',
+                ),
+                trailing: slowRegexCount == 0
+                    ? null
+                    : TextButton(
+                        onPressed: _restoreDanmakuRegex,
+                        child: const Text('重新启用'),
+                      ),
+              ),
+            ),
           const SizedBox(height: 8),
           Card(
             clipBehavior: Clip.antiAlias,
@@ -445,78 +487,9 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
                   value: PurifyProfileBackup.autoBackup,
                   onChanged: _toggleAutoBackup,
                   title: const Text('配置变化后自动备份'),
-                  subtitle: const Text(
-                    '固定文件名保存，并保留上一版；不包含账号、Cookie、历史和远程备份密钥',
-                  ),
+                  subtitle: const Text('固定文件名保存，并保留上一版；不包含账号、Cookie、历史和远程备份密钥'),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  onTap: () => _open('/replyPurify'),
-                  leading: const Icon(Icons.comments_disabled_outlined),
-                  title: const Text('评论净化助手'),
-                  subtitle: Text(
-                    '$replyCount 个仅评论区屏蔽账号；'
-                    'AI 评论检测${aiFilterLevel == ReplyAiFilterLevel.off ? '未启用' : '已启用·${aiFilterLevel.label}'}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  onTap: () => _open('/danmakuAssistant'),
-                  leading: const Icon(Icons.subtitles_off_outlined),
-                  title: const Text('弹幕屏蔽助手'),
-                  subtitle: Text('$ruleCount 条文字规则，已启用 $formatCount 项格式识别'),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  onTap: () => _open('/videoPurify'),
-                  leading: const Icon(Icons.video_library_outlined),
-                  title: const Text('视频关键词屏蔽'),
-                  subtitle: Text(
-                    videoPurify.enabled
-                        ? '已启用标题关键词过滤${videoPurify.applyToRelatedVideos ? '，包含相关视频' : ''}'
-                        : '未启用；按标题过滤推荐、热门与排行视频',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (slowRegexCount > 0 || rejectedRegexCount > 0)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.warning_amber_outlined),
-                title: const Text('正则安全状态'),
-                subtitle: Text(
-                  '本进程停用慢规则 $slowRegexCount 条；'
-                  '拒绝高风险规则 $rejectedRegexCount 条',
-                ),
-                trailing: slowRegexCount == 0
-                    ? null
-                    : TextButton(
-                        onPressed: _restoreDanmakuRegex,
-                        child: const Text('重新启用'),
-                      ),
-              ),
-            ),
-          if (slowRegexCount > 0 || rejectedRegexCount > 0)
-            const SizedBox(height: 8),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.tune_outlined),
-              title: Text('基础过滤仍然保留'),
-              subtitle: Text(
-                '评论关键词、带货评论、@ 数量和传统弹幕关键词/正则/UID 规则仍可在原设置与播放器菜单中使用。',
-              ),
             ),
           ),
         ],

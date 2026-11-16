@@ -3,7 +3,8 @@ import 'dart:math';
 
 enum TemplateSpamReason {
   peopleCount('人数模板刷屏'),
-  relativeTime('时间模板刷屏');
+  relativeTime('时间模板刷屏'),
+  symbolFragment('短符号组合刷屏');
 
   const TemplateSpamReason(this.label);
 
@@ -70,9 +71,16 @@ class TemplateSpamTracker {
   static final int _defaultProcessSalt = Random.secure().nextInt(1 << 31);
   static final RegExp _whitespace = RegExp(r'\s+', unicode: true);
   static final RegExp _peopleCount = RegExp(r'^(\d{3,7})\s*\+$');
-  static final RegExp _relativeTime = RegExp(
-    r'^(\d{1,3})\s*(秒|分钟|小时|天)前$',
+  static final RegExp _symbolFragment = RegExp(
+    r'''^(?:[/\\。.,，!?！？;；【】\[\]《》「」“”‘’"']{1,4}|[.。]0|[←→↑↓][+]?\d{1,2})$''',
   );
+  static final RegExp _relativeTime = RegExp(
+    r'^(\d{1,3}|[零〇一二两三四五六七八九十百]{1,5}|半)\s*(秒|分钟|小时|天)(前)?(?:[，,、 ]*(热乎|热热|热乎乎|热热能吃|热乎能吃|凉了))?$',
+  );
+  static final RegExp _englishTime = RegExp(
+    r'^\d{1,3}\s+(seconds?|minutes?|hours?|days?)(?:\s+ago)?$',
+  );
+  static final RegExp _trailingPunctuation = RegExp(r'[!！?？。，,.、；;]+$');
 
   final int _processSalt;
   final int maxResidentCids;
@@ -94,12 +102,38 @@ class TemplateSpamTracker {
       );
     }
 
-    if (_relativeTime.firstMatch(normalized) case final match?) {
-      final unit = match.group(2)!;
+    if (_symbolFragment.hasMatch(normalized)) {
+      return TemplateSpamCandidate(
+        reason: TemplateSpamReason.symbolFragment,
+        normalizedText: normalized,
+        templateKey: '<symbol-fragment>',
+      );
+    }
+
+    final timeText = normalized.replaceAll(_trailingPunctuation, '').trim();
+    if (_relativeTime.firstMatch(timeText) case final match?) {
+      final unit = match.group(1) == '半' && match.group(2) == '小时'
+          ? '分钟'
+          : match.group(2)!;
+      final suffix = match.group(3) == null ? '时长' : '前';
       return TemplateSpamCandidate(
         reason: TemplateSpamReason.relativeTime,
         normalizedText: normalized,
-        templateKey: '<n>$unit前',
+        templateKey: '<n>$unit$suffix',
+      );
+    }
+
+    if (_englishTime.firstMatch(timeText) case final match?) {
+      final unit = switch (match.group(1)!.replaceAll(RegExp(r's$'), '')) {
+        'second' => '秒',
+        'minute' => '分钟',
+        'hour' => '小时',
+        _ => '天',
+      };
+      return TemplateSpamCandidate(
+        reason: TemplateSpamReason.relativeTime,
+        normalizedText: normalized,
+        templateKey: '<n>$unit${timeText.endsWith('ago') ? '前' : '时长'}',
       );
     }
 
@@ -131,41 +165,35 @@ class TemplateSpamTracker {
     }
 
     final senderHash = _hashSender(sender);
-    final events = state.touchEvents(
+    final history = state.touchEvents(
       candidate.templateKey,
       maxTrackedTemplates,
     );
-    final event = _TemplateEvent(
-      eventKey: eventKey,
-      progress: progress,
-      senderHash: senderHash,
+    final events = history.events;
+    final event = _TemplateEvent(eventKey: eventKey, progress: progress);
+    final insertAt = _lowerBound(
+      events,
+      progress + 1,
+      (event) => event.progress,
     );
-    var insertAt = events.length;
-    while (insertAt > 0 && events[insertAt - 1].progress > progress) {
-      insertAt--;
-    }
     events.insert(insertAt, event);
-
-    var globalCount = 0;
-    var sameSenderCount = 0;
-    var globalWindowStart = progress;
-    var sameSenderWindowStart = progress;
-    for (final previous in events) {
-      final age = progress - previous.progress;
-      if (age < 0) break;
-      if (age < globalWindowMilliseconds) {
-        globalCount++;
-        globalWindowStart = min(globalWindowStart, previous.progress);
-      }
-      if (previous.senderHash == senderHash &&
-          age < senderWindowMilliseconds) {
-        sameSenderCount++;
-        sameSenderWindowStart = min(
-          sameSenderWindowStart,
-          previous.progress,
-        );
-      }
-    }
+    final senderTimes = history.bySender.putIfAbsent(senderHash, () => <int>[]);
+    final senderEnd = _lowerBound(senderTimes, progress + 1, (time) => time);
+    senderTimes.insert(senderEnd, progress);
+    final senderStart = _lowerBound(
+      senderTimes,
+      progress - senderWindowMilliseconds + 1,
+      (time) => time,
+    );
+    final globalStart = _lowerBound(
+      events,
+      progress - globalWindowMilliseconds + 1,
+      (event) => event.progress,
+    );
+    final globalCount = insertAt + 1 - globalStart;
+    final sameSenderCount = senderEnd + 1 - senderStart;
+    final globalWindowStart = events[globalStart].progress;
+    final sameSenderWindowStart = senderTimes[senderStart];
 
     final sameSenderHit = sameSenderCount >= senderWindowThreshold;
     final globalHit = globalCount >= globalWindowThreshold;
@@ -190,6 +218,20 @@ class TemplateSpamTracker {
   void clearCid(int cid) {
     _states.remove(cid);
     if (_activeCid == cid) _activeCid = null;
+  }
+
+  static int _lowerBound<T>(List<T> items, int value, int Function(T) timeOf) {
+    var low = 0;
+    var high = items.length;
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      if (timeOf(items[middle]) < value) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
   }
 
   void clear() {
@@ -227,25 +269,25 @@ class TemplateSpamTracker {
         buffer.writeCharCode(rune);
       }
     }
-    return buffer.toString().replaceAll(_whitespace, ' ').trim();
+    return buffer.toString().replaceAll(_whitespace, ' ').trim().toLowerCase();
   }
 }
 
 class _TemplateCidState {
-  final LinkedHashMap<String, List<_TemplateEvent>> eventsByTemplate =
+  final LinkedHashMap<String, _TemplateHistory> eventsByTemplate =
       LinkedHashMap();
   final Set<String> seenEventKeys = <String>{};
   final Map<String, TemplateSpamMatch> blockedDecisions =
       <String, TemplateSpamMatch>{};
 
-  List<_TemplateEvent> touchEvents(String key, int maxTrackedTemplates) {
+  _TemplateHistory touchEvents(String key, int maxTrackedTemplates) {
     final existing = eventsByTemplate.remove(key);
-    final events = existing ?? <_TemplateEvent>[];
+    final events = existing ?? _TemplateHistory();
     eventsByTemplate[key] = events;
     if (eventsByTemplate.length > maxTrackedTemplates) {
       final removed = eventsByTemplate.remove(eventsByTemplate.keys.first);
       if (removed != null) {
-        for (final event in removed) {
+        for (final event in removed.events) {
           seenEventKeys.remove(event.eventKey);
           blockedDecisions.remove(event.eventKey);
         }
@@ -255,14 +297,14 @@ class _TemplateCidState {
   }
 }
 
+class _TemplateHistory {
+  final List<_TemplateEvent> events = [];
+  final Map<String, List<int>> bySender = {};
+}
+
 class _TemplateEvent {
-  const _TemplateEvent({
-    required this.eventKey,
-    required this.progress,
-    required this.senderHash,
-  });
+  const _TemplateEvent({required this.eventKey, required this.progress});
 
   final String eventKey;
   final int progress;
-  final String senderHash;
 }

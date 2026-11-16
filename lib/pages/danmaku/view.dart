@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
 import 'package:PiliPlus/pages/danmaku/controller.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
@@ -58,8 +59,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
       ..beginDanmakuAssistantSession(widget.cid)
       ..addDanmakuFilterReloader(_reloadDanmakuFilters);
     if (widget.isFileSource && Get.isRegistered<DownloadService>()) {
-      _danmakuUpdateSub = Get.find<DownloadService>()
-          .danmakuUpdates
+      _danmakuUpdateSub = Get.find<DownloadService>().danmakuUpdates
           .where((event) => event.cid == widget.cid)
           .listen((_) {
             if (mounted) _reloadDanmakuFilters();
@@ -148,6 +148,8 @@ class _PlDanmakuState extends State<PlDanmaku> {
                 extra: VideoDanmaku(
                   id: e.id.toInt(),
                   mid: e.midHash,
+                  originalContent: e.content,
+                  progress: e.progress,
                   like: e.likeCount.toInt(),
                 ),
               ),
@@ -156,7 +158,9 @@ class _PlDanmakuState extends State<PlDanmaku> {
         } else {
           _controller!.addDanmaku(
             DanmakuContentItem(
-              e.content,
+              playerController.danmakuAssistantConfig.blockRepeatedSpam
+                  ? DanmakuSpamDetector.compactDisplay(e.content)
+                  : e.content,
               color: blockColorful
                   ? Colors.white
                   : DmUtils.decimalToColor(e.color),
@@ -169,6 +173,8 @@ class _PlDanmakuState extends State<PlDanmaku> {
               extra: VideoDanmaku(
                 id: e.id.toInt(),
                 mid: e.midHash,
+                originalContent: e.content,
+                progress: e.progress,
                 like: e.likeCount.toInt(),
               ),
             ),

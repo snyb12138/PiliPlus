@@ -6,6 +6,7 @@ import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
+import 'package:PiliPlus/pages/video_purify/controller.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
@@ -54,6 +55,9 @@ class HomeController extends GetxController
     }
 
     setTabConfig();
+    if (!Get.isRegistered<VideoPurifyHomeController>()) {
+      Get.put(VideoPurifyHomeController());
+    }
   }
 
   @override
@@ -65,10 +69,32 @@ class HomeController extends GetxController
   void setTabConfig() {
     final tabs = GStorage.setting.get(SettingBoxKey.tabBarSort) as List?;
     if (tabs != null) {
-      this.tabs = tabs.map((i) => HomeTabType.values[i]).toList();
+      this.tabs = tabs
+          .whereType<int>()
+          .where((i) => i >= 0 && i < HomeTabType.values.length)
+          .map((i) => HomeTabType.values[i])
+          .toSet()
+          .toList();
     } else {
-      this.tabs = HomeTabType.values;
+      this.tabs = List<HomeTabType>.of(HomeTabType.values);
     }
+    // Append, never insert an enum value: existing stored indices stay valid.
+    // Migrate once so users may still hide/reorder the new tab afterwards.
+    if (GStorage.setting.get(
+          'purifyVideoHomeTabMigrated',
+          defaultValue: false,
+        ) !=
+        true) {
+      if (!this.tabs.contains(HomeTabType.videoPurify)) {
+        this.tabs.add(HomeTabType.videoPurify);
+      }
+      GStorage.setting.put(
+        SettingBoxKey.tabBarSort,
+        this.tabs.map((e) => e.index).toList(),
+      );
+      GStorage.setting.put('purifyVideoHomeTabMigrated', true);
+    }
+    if (this.tabs.isEmpty) this.tabs.add(HomeTabType.rcmd);
 
     tabController = TabController(
       initialIndex: max(0, this.tabs.indexOf(HomeTabType.rcmd)),
