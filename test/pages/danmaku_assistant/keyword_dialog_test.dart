@@ -43,6 +43,7 @@ void main() {
     expect(find.text('我活到头了？竟然更新饥荒'), findsOneWidget);
     expect(saved, isNull);
     await tester.enterText(find.byType(TextField), '  更新饥荒  ');
+    await tester.pump();
     expect(saved, isNull);
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
@@ -80,6 +81,7 @@ void main() {
   testWidgets('whitespace cannot be confirmed', (tester) async {
     await _openDialog(tester, content: '测试', onResult: (_) {});
     await tester.enterText(find.byType(TextField), '   ');
+    await tester.pump();
     final button = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(button.onPressed, isNull);
   });
