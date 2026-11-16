@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/pages/danmaku_assistant/records.dart';
+import 'package:PiliPlus/pages/purify_center/record_section.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/purify_hub_card.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/purify_profile_backup.dart';
@@ -36,6 +37,7 @@ class PurifyCenterPage extends StatefulWidget {
 
 class _PurifyCenterPageState extends State<PurifyCenterPage> {
   bool _showDanmakuRecords = false;
+  bool _recordsExpanded = true;
 
   void _restoreDanmakuRegex() {
     if (Pref.danmakuFilterRule.restoreSessionDisabledRegex() && mounted) {
@@ -358,56 +360,31 @@ class _PurifyCenterPageState extends State<PurifyCenterPage> {
           padding.bottom + 100,
         ),
         children: [
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const ListTile(
-                  leading: Icon(Icons.visibility_outlined),
-                  title: Text('本视频净化记录'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: Text(
-                          '评论净化 ${(session?.foldedCount ?? 0) + (session?.blockedCount ?? 0)}',
-                        ),
-                        selected: !_showDanmakuRecords,
-                        onSelected: (_) =>
-                            setState(() => _showDanmakuRecords = false),
-                      ),
-                      ChoiceChip(
-                        label: Text(
-                          '弹幕净化 ${player?.danmakuAssistantBlockedTotal ?? 0}',
-                        ),
-                        selected: _showDanmakuRecords,
-                        onSelected: (_) =>
-                            setState(() => _showDanmakuRecords = true),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_showDanmakuRecords)
-                  if (player != null)
-                    DanmakuPurifyRecords(controller: player)
-                  else
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('请从视频播放页进入，以查看当前视频弹幕记录。'),
-                    )
-                else if (session != null)
-                  _buildVideoPreview(session)
-                else
-                  const Padding(
+          PurifyRecordSection(
+            commentCount:
+                (session?.foldedCount ?? 0) + (session?.blockedCount ?? 0),
+            danmakuCount: player?.danmakuAssistantBlockedTotal ?? 0,
+            showDanmakuRecords: _showDanmakuRecords,
+            expanded: _recordsExpanded,
+            onShowComments: () =>
+                setState(() => _showDanmakuRecords = false),
+            onShowDanmaku: () =>
+                setState(() => _showDanmakuRecords = true),
+            onToggleExpanded: () =>
+                setState(() => _recordsExpanded = !_recordsExpanded),
+            child: _showDanmakuRecords
+                ? player != null
+                      ? DanmakuPurifyRecords(controller: player)
+                      : const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('请从视频播放页进入，以查看当前视频弹幕记录。'),
+                        )
+                : session != null
+                ? _buildVideoPreview(session)
+                : const Padding(
                     padding: EdgeInsets.all(16),
                     child: Text('请从视频播放页进入，以查看当前视频评论记录。'),
                   ),
-              ],
-            ),
           ),
           const SizedBox(height: 8),
           ReplyPurifyHubCard(

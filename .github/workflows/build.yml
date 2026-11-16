@@ -119,6 +119,7 @@ jobs:
                     lib/pages/video_purify/controller.dart \
                     lib/pages/video_purify/view.dart \
                     lib/pages/video/view.dart \
+                    lib/pages/purify_center/record_section.dart \
                     lib/pages/purify_center/view.dart \
                     lib/pages/reply_purify/view.dart \
                     lib/pages/setting/models/reply_settings.dart \
@@ -132,6 +133,7 @@ jobs:
                     test/models/user/danmaku_template_spam_tracker_test.dart \
                     test/models/user/danmaku_noise_policy_test.dart \
                     test/pages/danmaku_assistant/keyword_dialog_test.dart \
+                    test/pages/purify_center/record_section_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     test/utils/purify_profile_backup_test.dart \
@@ -144,6 +146,7 @@ jobs:
                     test/models/user/danmaku_template_spam_tracker_test.dart \
                     test/models/user/danmaku_noise_policy_test.dart \
                     test/pages/danmaku_assistant/keyword_dialog_test.dart \
+                    test/pages/purify_center/record_section_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     --no-pub
