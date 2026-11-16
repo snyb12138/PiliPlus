@@ -70,7 +70,7 @@ class DanmakuLearningSample {
     'normalizedText': DanmakuSpamDetector.normalize(content).normalizedKey,
     'keyword': keyword,
     'mode': mode,
-    if (progress != null) 'progress': progress!,
+    'progress': ?progress,
     'count': count,
   };
 }

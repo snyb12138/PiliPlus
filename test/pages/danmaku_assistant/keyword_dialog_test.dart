@@ -126,7 +126,7 @@ void main() {
       final config = DanmakuAssistantConfig.defaults().copyWith(
         absoluteRules: [saved!],
       );
-      expect(config.match('前缀${keyword}后缀'), isNotNull);
+      expect(config.match('前缀$keyword后缀'), isNotNull);
       expect(config.match('普通文字'), isNull);
     },
   );
