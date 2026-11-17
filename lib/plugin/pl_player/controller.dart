@@ -458,11 +458,58 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     return key.isNotEmpty && danmakuSpamAllowedKeys.contains(key);
   }
 
+  bool _isAutomaticDanmakuMatch(DanmakuAssistantRecord record) {
+    final kind = record.match?.kind;
+    return kind != null &&
+        kind != DanmakuAssistantKind.absolute &&
+        kind != DanmakuAssistantKind.gentle &&
+        kind != DanmakuAssistantKind.traditionalRule;
+  }
+
+  void _dismissAllowedDanmakuRecords(
+    bool Function(DanmakuAssistantRecord record) shouldRemove,
+  ) {
+    final removedByKind = removeDanmakuAssistantRecordsWhere(
+      danmakuAssistantHits,
+      shouldRemove,
+    );
+    final removedTotal = removedByKind.values.fold(
+      0,
+      (sum, count) => sum + count,
+    );
+    if (removedTotal > 0) {
+      danmakuAssistantBlockedTotal = max(
+        0,
+        danmakuAssistantBlockedTotal - removedTotal,
+      );
+      for (final MapEntry(key: kind, value: count) in removedByKind.entries) {
+        final remaining = (danmakuAssistantReasonCounts[kind] ?? 0) - count;
+        if (remaining > 0) {
+          danmakuAssistantReasonCounts[kind] = remaining;
+        } else {
+          danmakuAssistantReasonCounts.remove(kind);
+        }
+      }
+    }
+    danmakuAssistantRevision.value++;
+  }
+
+  void _storeDanmakuAssistantConfig(DanmakuAssistantConfig config) {
+    danmakuAssistantConfig = config;
+    GStorage.localCache.put(
+      LocalCacheKey.danmakuAssistantConfig,
+      config.toStorage(),
+    );
+  }
+
   void allowDanmakuSpamForCurrentVideo(String content) {
     final key = DanmakuSpamDetector.normalize(content).repeatBaseKey;
     if (key.isEmpty || !danmakuSpamAllowedKeys.add(key)) return;
-    clearDanmakuAssistantRecords();
-    reloadDanmakuFilters();
+    _dismissAllowedDanmakuRecords(
+      (record) =>
+          _isAutomaticDanmakuMatch(record) &&
+          DanmakuSpamDetector.normalize(record.content).repeatBaseKey == key,
+    );
   }
 
   void revokeDanmakuSpamAllowance(String key) {
@@ -478,13 +525,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     )) {
       return;
     }
-    updateDanmakuAssistantConfig(
+    final key = DanmakuNoisePolicy.key(content);
+    _storeDanmakuAssistantConfig(
       danmakuAssistantConfig.copyWith(
         noiseWhitelist: [
           ...danmakuAssistantConfig.noiseWhitelist,
           content.trim(),
         ],
       ),
+    );
+    _dismissAllowedDanmakuRecords(
+      (record) =>
+          _isAutomaticDanmakuMatch(record) &&
+          DanmakuNoisePolicy.key(record.content) == key,
     );
   }
 
@@ -548,11 +601,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void updateDanmakuAssistantConfig(DanmakuAssistantConfig config) {
-    danmakuAssistantConfig = config;
-    GStorage.localCache.put(
-      LocalCacheKey.danmakuAssistantConfig,
-      config.toStorage(),
-    );
+    _storeDanmakuAssistantConfig(config);
     clearDanmakuAssistantRecords();
     reloadDanmakuFilters();
   }

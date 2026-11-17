@@ -129,6 +129,45 @@ void main() {
     expect(encoded, isNot(contains('account')));
   });
 
+  test('targeted allow keeps unrelated purification records', () {
+    const strict = DanmakuAssistantMatch(
+      kind: DanmakuAssistantKind.strictNoise,
+      reason: '激进过滤',
+    );
+    const repeated = DanmakuAssistantMatch(
+      kind: DanmakuAssistantKind.repeatedSpam,
+      reason: '重复刷屏',
+    );
+    final records = <DanmakuAssistantRecord>[
+      const DanmakuAssistantRecord(
+        content: 'noise',
+        progress: 1000,
+        match: strict,
+      ),
+      const DanmakuAssistantRecord(
+        content: 'keep me',
+        progress: 2000,
+        match: repeated,
+      ),
+      const DanmakuAssistantRecord(
+        content: 'noise',
+        progress: 3000,
+        match: repeated,
+      ),
+    ];
+
+    final removed = removeDanmakuAssistantRecordsWhere(
+      records,
+      (record) => DanmakuNoisePolicy.key(record.content) == 'noise',
+    );
+
+    expect(records.map((record) => record.content), ['keep me']);
+    expect(removed, {
+      DanmakuAssistantKind.strictNoise: 1,
+      DanmakuAssistantKind.repeatedSpam: 1,
+    });
+  });
+
   test('new settings and samples survive the existing backup payload', () {
     final config = DanmakuAssistantConfig.defaults().copyWith(
       strictNoiseFilter: true,

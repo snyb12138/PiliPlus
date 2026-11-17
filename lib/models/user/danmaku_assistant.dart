@@ -54,6 +54,29 @@ class DanmakuAssistantRecord {
   final DanmakuAssistantMatch? match;
 }
 
+/// Removes only the records affected by a targeted allow action.
+///
+/// Returning the removed count per reason lets the player keep its summary in
+/// sync without clearing unrelated records from the current review session.
+Map<DanmakuAssistantKind, int> removeDanmakuAssistantRecordsWhere(
+  List<DanmakuAssistantRecord> records,
+  bool Function(DanmakuAssistantRecord record) shouldRemove,
+) {
+  final removedByKind = <DanmakuAssistantKind, int>{};
+  records.removeWhere((record) {
+    if (!shouldRemove(record)) return false;
+    if (record.match case final match?) {
+      removedByKind.update(
+        match.kind,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    return true;
+  });
+  return removedByKind;
+}
+
 class DanmakuAssistantConfig {
   const DanmakuAssistantConfig({
     required this.absoluteRules,
