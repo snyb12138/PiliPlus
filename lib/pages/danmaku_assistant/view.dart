@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_export.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
 import 'package:PiliPlus/pages/danmaku_assistant/records.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
@@ -174,15 +175,17 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
     );
   }
 
-  Future<void> _exportLearningSamples() async {
+  Future<void> _exportLearningData() async {
     final samples = List<DanmakuLearningSample>.of(_config.learningSamples);
+    final whitelist = List<String>.of(_config.noiseWhitelist);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('导出待学习样本？'),
+        title: const Text('导出弹幕学习资料？'),
         content: Text(
-          '将导出 ${samples.length} 条手动屏蔽样本的原文、关键词、'
-          '匹配方式和重复次数；不包含发送者、账号或视频链接。'
+          '将导出 ${samples.length} 条手动屏蔽样本和 '
+          '${whitelist.length} 条手动白名单。屏蔽样本包含原文、关键词、'
+          '匹配方式和重复次数；不包含发送者、账号、CID 或视频链接。'
           '不会自动上传，也不会自动生成规则。',
         ),
         actions: [
@@ -199,11 +202,13 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
     );
     if (confirmed != true) return;
     exportToLocalFile(
-      localFileName: () => 'danmaku_learning_v1',
-      onExport: () => Utils.jsonEncoder.convert({
-        'schema': 'piliplus-danmaku-learning/v1',
-        'samples': samples.map((item) => item.toStorage()).toList(),
-      }),
+      localFileName: () => 'danmaku_learning_v2',
+      onExport: () => Utils.jsonEncoder.convert(
+        DanmakuLearningExport.build(
+          samples: samples,
+          whitelist: whitelist,
+        ),
+      ),
     );
   }
 
@@ -237,17 +242,25 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
           ],
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed:
+                _config.learningSamples.isEmpty &&
+                    _config.noiseWhitelist.isEmpty
+                ? null
+                : _exportLearningData,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('导出手动屏蔽与白名单 JSON'),
+          ),
+        ),
+      ),
       ExpansionTile(
         title: Text('待学习名单 ${_config.learningSamples.length} 条'),
         subtitle: const Text('仅收集手动屏蔽；去重并保留最近 1000 条，随配置备份。'),
         children: [
-          TextButton.icon(
-            onPressed: _config.learningSamples.isEmpty
-                ? null
-                : _exportLearningSamples,
-            icon: const Icon(Icons.file_download_outlined),
-            label: const Text('预览并导出待学习 JSON'),
-          ),
           for (final sample in _config.learningSamples.take(50))
             ListTile(
               title: Text(sample.content),

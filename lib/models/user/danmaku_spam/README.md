@@ -12,10 +12,11 @@
   Explicit keyword/regex/sender block rules still take priority. All allowlist
   additions require a deliberate user action; no sample promotes itself.
 - Learning samples come only from manual content-blocking actions, retain raw
-  text and the selected keyword/mode, deduplicate and cap at 1000 records. They
-  are editable and explicitly exported as JSON; no upload or rule learning
-  happens inside the app. No sender identifiers, cid, URLs or credentials are
-  included. Both samples and allowlists use the existing profile backup.
+  text and the selected keyword/mode, deduplicate and cap at 1000 records. The
+  samples and exact manual whitelist are explicitly exported together as JSON;
+  no upload or rule learning happens inside the app. No sender identifiers,
+  cid, URLs or credentials are included. Both samples and allowlists use the
+  existing profile backup.
 - Character runs may be shortened to three for display. Filtering, preview and
   keyword extraction retain the original text. Embedded primitive short phrases
   use a bounded scan, not a backtracking regex.

@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_export.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
@@ -96,6 +99,34 @@ void main() {
     expect(samples.length, DanmakuLearningSample.maxSamples);
     expect(samples.first.content, '${DanmakuLearningSample.maxSamples}');
     expect(samples.any((item) => item.content == '0'), isFalse);
+  });
+
+  test('learning export includes manual blocks and exact whitelist entries', () {
+    const sample = DanmakuLearningSample(
+      content: '需要屏蔽的原文',
+      keyword: '屏蔽',
+      mode: 'contains',
+      count: 2,
+    );
+    final encoded = jsonEncode(
+      DanmakuLearningExport.build(
+        samples: const [sample],
+        whitelist: const ['  正常弹幕  ', '正常弹幕', '', '另一条白名单'],
+      ),
+    );
+    final decoded = jsonDecode(encoded) as Map<String, dynamic>;
+    expect(decoded['schema'], DanmakuLearningExport.schema);
+    expect(decoded['whitelist'], ['正常弹幕', '另一条白名单']);
+    expect((decoded['samples'] as List).single, {
+      'content': '需要屏蔽的原文',
+      'normalizedText': '需要屏蔽的原文',
+      'keyword': '屏蔽',
+      'mode': 'contains',
+      'count': 2,
+    });
+    expect(encoded, isNot(contains('sender')));
+    expect(encoded, isNot(contains('cid')));
+    expect(encoded, isNot(contains('account')));
   });
 
   test('new settings and samples survive the existing backup payload', () {

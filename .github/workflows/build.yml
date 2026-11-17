@@ -105,6 +105,7 @@ jobs:
                     lib/models/user/danmaku_spam/template_tracker.dart \
                     lib/models/user/danmaku_spam/noise_policy.dart \
                     lib/models/user/danmaku_spam/learning_sample.dart \
+                    lib/models/user/danmaku_spam/learning_export.dart \
                     lib/models/user/danmaku_assistant.dart \
                     lib/models/common/home_tab_type.dart \
                     lib/models/user/reply_density_detector.dart \
