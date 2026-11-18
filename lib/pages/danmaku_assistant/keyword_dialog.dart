@@ -22,7 +22,7 @@ Future<bool> confirmBroadShortNumericRule(
       title: const Text('确认使用短数字包含匹配？'),
       content: Text(
         '“$keyword”只有一到两位数字。包含匹配会同时屏蔽所有含有该数字的弹幕，'
-        '例如“${keyword}分钟”和“1${keyword}级”。\n\n'
+        '例如“$keyword分钟”和“1$keyword级”。\n\n'
         '激进过滤已能屏蔽整条纯数字弹幕；通常无需再创建这条规则。',
       ),
       actions: [
