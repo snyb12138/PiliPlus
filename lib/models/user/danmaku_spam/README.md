@@ -28,6 +28,22 @@
   all historical events on every new message. Existing half-open boundaries,
   duplicate-event decisions and three-cid LRU retention are preserved.
 
+## 1.3.2 aggressive numeric and symbol policy
+
+- The manual exact whitelist is evaluated first and may exempt every rule in
+  this section.
+- Whole-message ASCII numbers are blocked regardless of length. Exact `666`
+  is the sole built-in exemption after width and whitespace normalization.
+- A whole message made only from digits and symbols is blocked without a
+  length or ratio threshold. Normal sentences such as `等级+1` stay outside
+  this lexical rule because they contain letters.
+- Symbol-only messages are blocked unless every symbol is `?` or `!`.
+  Repeated question/exclamation spam may still be handled by the existing
+  repetition detector.
+- Configurations older than version 4 migrate one- or two-digit absolute
+  substring rules to exact rules. New broad rules remain possible only after
+  an explicit high-risk confirmation.
+
 This module contains the opt-in v1.2 test implementation for repeated short
 danmaku and symbol spam. It is deliberately independent from the permanent
 keyword, regular-expression, and sender block lists.

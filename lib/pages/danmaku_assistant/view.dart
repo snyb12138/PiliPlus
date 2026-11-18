@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/learning_export.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+import 'package:PiliPlus/pages/danmaku_assistant/keyword_dialog.dart';
 import 'package:PiliPlus/pages/danmaku_assistant/records.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -108,6 +109,10 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
 
     final rule = result.trim();
     if (rule.isEmpty) return;
+    if (absolute && !await confirmBroadShortNumericRule(context, rule)) {
+      return;
+    }
+    if (!mounted) return;
     final rules = List<String>.of(
       absolute ? _config.absoluteRules : _config.gentleRules,
     );

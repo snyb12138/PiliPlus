@@ -18,7 +18,10 @@ class DanmakuLearningSample {
 
   static const int maxSamples = 1000;
 
-  static List<DanmakuLearningSample> fromStorage(Object? raw) {
+  static List<DanmakuLearningSample> fromStorage(
+    Object? raw, {
+    bool migrateShortNumericContains = true,
+  }) {
     if (raw is! List) return const [];
     return [
       for (final entry in raw.take(maxSamples))
@@ -29,7 +32,12 @@ class DanmakuLearningSample {
           DanmakuLearningSample(
             content: entry['content'] as String,
             keyword: entry['keyword'] as String,
-            mode: entry['mode'] as String,
+            mode:
+                migrateShortNumericContains &&
+                    entry['mode'] == 'contains' &&
+                    _isShortPureNumber(entry['keyword'] as String)
+                ? 'exact'
+                : entry['mode'] as String,
             progress: entry['progress'] is int
                 ? entry['progress'] as int
                 : null,
@@ -38,6 +46,11 @@ class DanmakuLearningSample {
                 : 1,
           ),
     ];
+  }
+
+  static bool _isShortPureNumber(String content) {
+    final normalized = DanmakuSpamDetector.normalize(content).normalizedKey;
+    return normalized.length <= 2 && RegExp(r'^[0-9]+$').hasMatch(normalized);
   }
 
   static List<DanmakuLearningSample> collect(

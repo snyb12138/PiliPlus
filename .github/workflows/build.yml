@@ -7,6 +7,7 @@ on:
             - "fix/danmaku-spam-noise"
             - "feature/purify-v1.3.0"
             - "feature/purify-v1.3.1"
+            - "feature/purify-v1.3.2"
 
     # pull_request:
     #     types:

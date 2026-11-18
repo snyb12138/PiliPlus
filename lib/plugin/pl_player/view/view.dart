@@ -1243,6 +1243,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           content: content,
         );
         if (!mounted || keyword == null) return;
+        if (!await confirmBroadShortNumericRule(context, keyword)) return;
+        if (!mounted) return;
         final added = plPlayerController.addDanmakuAssistantTextRule(
           keyword,
           absolute: true,
@@ -1305,6 +1307,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         );
         SmartDialog.showToast(added ? '已加入温和屏蔽' : '该规则已存在');
       case _DanmakuAssistantQuickAction.absolute:
+        if (!await confirmBroadShortNumericRule(context, content)) return;
+        if (!mounted) return;
         final added = plPlayerController.addDanmakuAssistantTextRule(
           content,
           absolute: true,

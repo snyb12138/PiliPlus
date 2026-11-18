@@ -1,4 +1,5 @@
 import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
 
 enum DanmakuAssistantKind {
   absolute('绝对屏蔽'),
@@ -123,9 +124,32 @@ class DanmakuAssistantConfig {
     }
 
     final defaults = DanmakuAssistantConfig.defaults();
+    final storedVersion = raw['version'] is int ? raw['version'] as int : 0;
+    final migrateUnsafeNumericRules = storedVersion < 4;
+    final storedAbsoluteRules = readRules(
+      'absoluteRules',
+      defaults.absoluteRules,
+    );
+    final migratedExactRules = migrateUnsafeNumericRules
+        ? storedAbsoluteRules
+              .where(DanmakuNoisePolicy.isShortPureNumber)
+              .toList(growable: false)
+        : const <String>[];
+    final storedGentleRules = readRules(
+      'gentleRules',
+      defaults.gentleRules,
+    );
     return DanmakuAssistantConfig(
-      absoluteRules: readRules('absoluteRules', defaults.absoluteRules),
-      gentleRules: readRules('gentleRules', defaults.gentleRules),
+      absoluteRules: migrateUnsafeNumericRules
+          ? storedAbsoluteRules
+                .where(
+                  (rule) => !DanmakuNoisePolicy.isShortPureNumber(rule),
+                )
+                .toList(growable: false)
+          : storedAbsoluteRules,
+      gentleRules: {...storedGentleRules, ...migratedExactRules}.toList(
+        growable: false,
+      ),
       blockDateStamps: readBool('blockDateStamps', defaults.blockDateStamps),
       blockTimeStamps: readBool('blockTimeStamps', defaults.blockTimeStamps),
       blockPeopleCounts: readBool(
@@ -144,6 +168,7 @@ class DanmakuAssistantConfig {
       noiseWhitelist: readRules('noiseWhitelist', const []),
       learningSamples: DanmakuLearningSample.fromStorage(
         raw['learningSamples'],
+        migrateShortNumericContains: migrateUnsafeNumericRules,
       ),
     );
   }
@@ -255,7 +280,7 @@ class DanmakuAssistantConfig {
   );
 
   Map<String, Object> toStorage() => {
-    'version': 3,
+    'version': 4,
     'absoluteRules': absoluteRules,
     'gentleRules': gentleRules,
     'blockDateStamps': blockDateStamps,

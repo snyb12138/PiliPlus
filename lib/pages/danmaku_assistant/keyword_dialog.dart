@@ -1,3 +1,4 @@
+import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Returns a literal keyword only after explicit confirmation. Saving the
@@ -9,6 +10,35 @@ Future<String?> showDanmakuKeywordDialog(
   context: context,
   builder: (_) => DanmakuKeywordDialog(content: content),
 );
+
+Future<bool> confirmBroadShortNumericRule(
+  BuildContext context,
+  String keyword,
+) async {
+  if (!DanmakuNoisePolicy.isShortPureNumber(keyword)) return true;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('确认使用短数字包含匹配？'),
+      content: Text(
+        '“$keyword”只有一到两位数字。包含匹配会同时屏蔽所有含有该数字的弹幕，'
+        '例如“${keyword}分钟”和“1${keyword}级”。\n\n'
+        '激进过滤已能屏蔽整条纯数字弹幕；通常无需再创建这条规则。',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('仍然添加'),
+        ),
+      ],
+    ),
+  );
+  return confirmed ?? false;
+}
 
 class DanmakuKeywordDialog extends StatefulWidget {
   const DanmakuKeywordDialog({required this.content, super.key});

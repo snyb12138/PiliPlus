@@ -31,6 +31,86 @@ void main() {
     expect(DanmakuNoisePolicy.reasons('nice', isolated: null), isEmpty);
   });
 
+  test('aggressive numeric and symbol rules follow the v1.3.2 contract', () {
+    for (final value in ['0', '36', '0130220', '136', '6666']) {
+      expect(
+        DanmakuNoisePolicy.reasons(value, isolated: null),
+        ['纯数字弹幕'],
+        reason: value,
+      );
+    }
+    for (final value in ['666', '６６６', ' 666 ']) {
+      expect(
+        DanmakuNoisePolicy.reasons(value, isolated: null),
+        isEmpty,
+        reason: value,
+      );
+    }
+    for (final value in ['.0', '001.', '+1', '3.14', '4444//////////////']) {
+      expect(
+        DanmakuNoisePolicy.reasons(value, isolated: null),
+        ['数字与符号组合'],
+        reason: value,
+      );
+    }
+    for (final value in ['。', ',', '/', r'\\', '】、【、', '=+-*']) {
+      expect(
+        DanmakuNoisePolicy.reasons(value, isolated: null),
+        ['冷僻符号组合'],
+        reason: value,
+      );
+    }
+    for (final value in ['？', '!', '？！', '36分钟', '等级+1']) {
+      expect(
+        DanmakuNoisePolicy.reasons(value, isolated: null),
+        isEmpty,
+        reason: value,
+      );
+    }
+  });
+
+  test('manual whitelist can override aggressive numeric filtering', () {
+    expect(DanmakuNoisePolicy.isAllowed('36', ['36']), isTrue);
+    expect(DanmakuNoisePolicy.isAllowed('136', ['36']), isFalse);
+  });
+
+  test('legacy short numeric contains rules migrate to exact matching', () {
+    final config = DanmakuAssistantConfig.fromStorage({
+      'version': 3,
+      'absoluteRules': ['36', '123', '其他'],
+      'gentleRules': ['0'],
+      'learningSamples': [
+        {
+          'content': '36',
+          'keyword': '36',
+          'mode': 'contains',
+        },
+      ],
+    });
+
+    expect(config.absoluteRules, ['123', '其他']);
+    expect(config.gentleRules.toSet(), {'0', '36'});
+    expect(config.learningSamples.single.mode, 'exact');
+    expect(config.toStorage()['version'], 4);
+  });
+
+  test('confirmed version 4 short numeric contains rules are preserved', () {
+    final config = DanmakuAssistantConfig.fromStorage({
+      'version': 4,
+      'absoluteRules': ['36'],
+      'learningSamples': [
+        {
+          'content': '36',
+          'keyword': '36',
+          'mode': 'contains',
+        },
+      ],
+    });
+
+    expect(config.absoluteRules, ['36']);
+    expect(config.learningSamples.single.mode, 'contains');
+  });
+
   test(
     'isolation uses neighbors on the raw video timeline and known coverage',
     () {
