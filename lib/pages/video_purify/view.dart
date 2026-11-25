@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/user/video_purify.dart';
+import 'package:PiliPlus/pages/video_purify/controller.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -8,7 +9,9 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class VideoPurifyPage extends StatefulWidget {
-  const VideoPurifyPage({super.key});
+  const VideoPurifyPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<VideoPurifyPage> createState() => _VideoPurifyPageState();
@@ -55,9 +58,7 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
     final value = pattern.trim();
     try {
       await _apply(_config.copyWith(keywordPattern: value));
-      SmartDialog.showToast(
-        value.isEmpty ? '已关闭视频关键词屏蔽' : '视频关键词已保存',
-      );
+      SmartDialog.showToast(value.isEmpty ? '已关闭视频关键词屏蔽' : '视频关键词已保存');
     } on FormatException catch (error) {
       SmartDialog.showToast('正则表达式无效：$error');
     }
@@ -79,7 +80,8 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
     final padding = MediaQuery.viewPaddingOf(context);
     return SimpleScaffold(
       appBar: AppBar(
-        title: const Text('视频关键词屏蔽'),
+        automaticallyImplyLeading: !widget.embedded,
+        title: const Text('视频净化'),
         actions: [
           IconButton(
             tooltip: '导入/导出',
@@ -89,6 +91,10 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
         ],
       ),
       body: ListView(
+        key: const PageStorageKey('video-purify-page'),
+        controller: widget.embedded
+            ? Get.find<VideoPurifyHomeController>().scrollController
+            : null,
         padding: EdgeInsets.only(bottom: padding.bottom + 32),
         children: [
           const ListTile(
@@ -111,9 +117,7 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
           SwitchListTile(
             secondary: const Icon(Icons.explore_outlined),
             title: const Text('同时过滤相关视频'),
-            subtitle: const Text(
-              '在视频详情页应用标题关键词；也会沿用推荐设置中的时长、播放量和点赞率过滤',
-            ),
+            subtitle: const Text('在视频详情页应用标题关键词；也会沿用推荐设置中的时长、播放量和点赞率过滤'),
             value: config.applyToRelatedVideos,
             onChanged: (value) =>
                 _apply(config.copyWith(applyToRelatedVideos: value)),
@@ -121,9 +125,7 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
           SwitchListTile(
             secondary: const Icon(Icons.favorite_border_outlined),
             title: const Text('豁免已关注 UP 主'),
-            subtitle: const Text(
-              '推荐流中已关注账号发布的视频不按关键词屏蔽；相关视频无法识别关注状态',
-            ),
+            subtitle: const Text('推荐流中已关注账号发布的视频不按关键词屏蔽；相关视频无法识别关注状态'),
             value: config.exemptFollowedUploaders,
             onChanged: (value) =>
                 _apply(config.copyWith(exemptFollowedUploaders: value)),
@@ -132,9 +134,12 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('当前作用范围'),
-            subtitle: Text(
-              '首页推荐、热门与排行；开启上方开关后也包括视频详情页的相关视频。搜索结果暂不处理。',
-            ),
+            subtitle: Text('首页推荐、热门与排行；开启上方开关后也包括视频详情页的相关视频。搜索结果暂不处理。'),
+          ),
+          const ListTile(
+            leading: Icon(Icons.label_outline),
+            title: Text('视频标签过滤（尚未启用）'),
+            subtitle: Text('此页面将作为后续标签过滤测试入口；当前仍仅按标题过滤，不额外请求标签。'),
           ),
         ],
       ),

@@ -54,6 +54,36 @@ void main() {
     expect(over64.repeatBaseKey, exactly64.repeatBaseKey);
   });
 
+  test('embedded run does not lower the whole expressive-text threshold', () {
+    final detector = DanmakuSpamDetector(processSalt: 1);
+
+    expect(
+      detector.inspect(content: '哈哈哈哈哈', progress: 0, sender: 'a'),
+      isNull,
+    );
+    expect(
+      detector
+          .inspect(content: '真的哈哈哈哈哈', progress: 0, sender: 'a')
+          ?.reason,
+      isNull,
+    );
+    expect(
+      detector
+          .inspect(content: '真的哈哈哈哈哈哈', progress: 0, sender: 'a')
+          ?.reason,
+      DanmakuSpamReason.embeddedCharacterRun,
+    );
+  });
+
+  test('short identifiers are not treated as keyboard mash', () {
+    final detector = DanmakuSpamDetector(processSalt: 1);
+
+    expect(
+      detector.inspect(content: 'BV1AB411c7mD', progress: 0, sender: 'a'),
+      isNull,
+    );
+  });
+
   test('global window keeps two and blocks the third including itself', () {
     final detector = DanmakuSpamDetector(processSalt: 1);
     expect(

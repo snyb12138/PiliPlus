@@ -10,6 +10,8 @@ class VideoDanmaku extends DanmakuExtra {
   final int id;
   @override
   final String mid;
+  final String? originalContent;
+  final int? progress;
 
   int like;
 
@@ -18,6 +20,8 @@ class VideoDanmaku extends DanmakuExtra {
   VideoDanmaku({
     required this.id,
     required this.mid,
+    this.originalContent,
+    this.progress,
     this.like = 0,
     this.isLike = false,
   });

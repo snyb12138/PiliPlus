@@ -4,6 +4,10 @@ on:
     push:
         branches:
             - "purify-v*"
+            - "fix/danmaku-spam-noise"
+            - "feature/purify-v1.3.0"
+            - "feature/purify-v1.3.1"
+            - "feature/purify-v1.3.2"
 
     # pull_request:
     #     types:
@@ -100,10 +104,25 @@ jobs:
                     lib/models/user/danmaku_rule.dart \
                     lib/models/user/danmaku_rule_adapter.dart \
                     lib/models/user/danmaku_spam/detector.dart \
+                    lib/models/user/danmaku_spam/template_tracker.dart \
+                    lib/models/user/danmaku_spam/noise_policy.dart \
+                    lib/models/user/danmaku_spam/learning_sample.dart \
+                    lib/models/user/danmaku_spam/learning_export.dart \
+                    lib/models/user/danmaku_assistant.dart \
+                    lib/models/common/home_tab_type.dart \
                     lib/models/user/reply_density_detector.dart \
                     lib/models/user/reply_purify.dart \
                     lib/pages/danmaku/controller.dart \
+                    lib/pages/danmaku/view.dart \
+                    lib/pages/danmaku/danmaku_model.dart \
+                    lib/pages/danmaku_assistant/keyword_dialog.dart \
+                    lib/pages/danmaku_assistant/records.dart \
                     lib/pages/danmaku_assistant/view.dart \
+                    lib/pages/home/controller.dart \
+                    lib/pages/video_purify/controller.dart \
+                    lib/pages/video_purify/view.dart \
+                    lib/pages/video/view.dart \
+                    lib/pages/purify_center/record_section.dart \
                     lib/pages/purify_center/view.dart \
                     lib/pages/reply_purify/view.dart \
                     lib/pages/setting/models/reply_settings.dart \
@@ -111,8 +130,13 @@ jobs:
                     lib/pages/video/reply/widgets/purify_hub_card.dart \
                     lib/pages/video/reply/widgets/reply_item_grpc.dart \
                     lib/plugin/pl_player/controller.dart \
+                    lib/plugin/pl_player/view/view.dart \
                     test/models/user/danmaku_assistant_test.dart \
                     test/models/user/danmaku_spam_detector_test.dart \
+                    test/models/user/danmaku_template_spam_tracker_test.dart \
+                    test/models/user/danmaku_noise_policy_test.dart \
+                    test/pages/danmaku_assistant/keyword_dialog_test.dart \
+                    test/pages/purify_center/record_section_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     test/utils/purify_profile_backup_test.dart \
@@ -122,6 +146,10 @@ jobs:
                     test/utils/purify_profile_backup_test.dart \
                     test/models/user/danmaku_assistant_test.dart \
                     test/models/user/danmaku_spam_detector_test.dart \
+                    test/models/user/danmaku_template_spam_tracker_test.dart \
+                    test/models/user/danmaku_noise_policy_test.dart \
+                    test/pages/danmaku_assistant/keyword_dialog_test.dart \
+                    test/pages/purify_center/record_section_test.dart \
                     test/models/user/reply_density_detector_test.dart \
                     test/models/user/reply_purify_test.dart \
                     --no-pub
@@ -141,7 +169,7 @@ jobs:
               if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
               shell: bash
               run: |
-                  if [[ "${{ github.event_name }}" == "push" ]]; then
+                  if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == purify-v* ]]; then
                     echo "release_tag=${{ github.ref_name }}" >> "$GITHUB_ENV"
                   else
                     echo "release_tag=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
@@ -214,11 +242,11 @@ jobs:
             tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
 
     win_x64:
-        if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_win_x64 == 'true' }}
+        if: ${{ (github.event_name == 'push' && (startsWith(github.ref_name, 'purify-v') || startsWith(github.ref_name, 'feature/purify-v1.3.'))) || (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_win_x64 == 'true' }}
         uses: ./.github/workflows/win_x64.yml
         permissions: write-all
         with:
-            tag: ${{ github.event_name == 'push' && github.ref_name || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '') }}
+            tag: ${{ (github.event_name == 'push' && startsWith(github.ref_name, 'purify-v') && github.ref_name) || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '') }}
 
     linux_x64:
         if: ${{ github.event.inputs.build_linux_x64 == 'true' }}

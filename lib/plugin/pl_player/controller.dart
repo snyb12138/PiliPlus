@@ -16,6 +16,9 @@ import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/danmaku_spam/detector.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/noise_policy.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/template_tracker.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
@@ -418,6 +421,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late RuleFilter filters = Pref.danmakuFilterRule;
   late DanmakuAssistantConfig danmakuAssistantConfig =
       Pref.danmakuAssistantConfig;
+  final TemplateSpamTracker danmakuTemplateSpamTracker = TemplateSpamTracker();
   final List<DanmakuAssistantRecord> danmakuAssistantSamples = [];
   final List<DanmakuAssistantRecord> danmakuAssistantHits = [];
   final Map<DanmakuAssistantKind, int> danmakuAssistantReasonCounts = {};
@@ -442,6 +446,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void beginDanmakuAssistantSession(int cid) {
+    danmakuTemplateSpamTracker.activateCid(cid);
     if (_danmakuAssistantCid == cid) return;
     _danmakuAssistantCid = cid;
     danmakuSpamAllowedKeys.clear();
@@ -453,17 +458,103 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     return key.isNotEmpty && danmakuSpamAllowedKeys.contains(key);
   }
 
+  bool _isAutomaticDanmakuMatch(DanmakuAssistantRecord record) {
+    final kind = record.match?.kind;
+    return kind != null &&
+        kind != DanmakuAssistantKind.absolute &&
+        kind != DanmakuAssistantKind.gentle &&
+        kind != DanmakuAssistantKind.traditionalRule;
+  }
+
+  void _dismissAllowedDanmakuRecords(
+    bool Function(DanmakuAssistantRecord record) shouldRemove,
+  ) {
+    final removedByKind = removeDanmakuAssistantRecordsWhere(
+      danmakuAssistantHits,
+      shouldRemove,
+    );
+    final removedTotal = removedByKind.values.fold(
+      0,
+      (sum, count) => sum + count,
+    );
+    if (removedTotal > 0) {
+      danmakuAssistantBlockedTotal = max(
+        0,
+        danmakuAssistantBlockedTotal - removedTotal,
+      );
+      for (final MapEntry(key: kind, value: count) in removedByKind.entries) {
+        final remaining = (danmakuAssistantReasonCounts[kind] ?? 0) - count;
+        if (remaining > 0) {
+          danmakuAssistantReasonCounts[kind] = remaining;
+        } else {
+          danmakuAssistantReasonCounts.remove(kind);
+        }
+      }
+    }
+    danmakuAssistantRevision.value++;
+  }
+
+  void _storeDanmakuAssistantConfig(DanmakuAssistantConfig config) {
+    danmakuAssistantConfig = config;
+    GStorage.localCache.put(
+      LocalCacheKey.danmakuAssistantConfig,
+      config.toStorage(),
+    );
+  }
+
   void allowDanmakuSpamForCurrentVideo(String content) {
     final key = DanmakuSpamDetector.normalize(content).repeatBaseKey;
     if (key.isEmpty || !danmakuSpamAllowedKeys.add(key)) return;
-    clearDanmakuAssistantRecords();
-    reloadDanmakuFilters();
+    _dismissAllowedDanmakuRecords(
+      (record) =>
+          _isAutomaticDanmakuMatch(record) &&
+          DanmakuSpamDetector.normalize(record.content).repeatBaseKey == key,
+    );
   }
 
   void revokeDanmakuSpamAllowance(String key) {
     if (!danmakuSpamAllowedKeys.remove(key)) return;
     clearDanmakuAssistantRecords();
     reloadDanmakuFilters();
+  }
+
+  void allowDanmakuGlobally(String content) {
+    if (DanmakuNoisePolicy.isAllowed(
+      content,
+      danmakuAssistantConfig.noiseWhitelist,
+    )) {
+      return;
+    }
+    final key = DanmakuNoisePolicy.key(content);
+    _storeDanmakuAssistantConfig(
+      danmakuAssistantConfig.copyWith(
+        noiseWhitelist: [
+          ...danmakuAssistantConfig.noiseWhitelist,
+          content.trim(),
+        ],
+      ),
+    );
+    _dismissAllowedDanmakuRecords(
+      (record) =>
+          _isAutomaticDanmakuMatch(record) &&
+          DanmakuNoisePolicy.key(record.content) == key,
+    );
+  }
+
+  bool blockDanmakuSenderLocally(String sender) {
+    if (sender.isEmpty || !filters.dmUid.add(sender)) return false;
+    filters.count++;
+    GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filters);
+    reloadDanmakuFilters();
+    return true;
+  }
+
+  bool unblockDanmakuSenderLocally(String sender) {
+    if (!filters.dmUid.remove(sender)) return false;
+    if (filters.count > 0) filters.count--;
+    GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filters);
+    reloadDanmakuFilters();
+    return true;
   }
 
   void recordDanmakuAssistantBatch({
@@ -510,11 +601,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void updateDanmakuAssistantConfig(DanmakuAssistantConfig config) {
-    danmakuAssistantConfig = config;
-    GStorage.localCache.put(
-      LocalCacheKey.danmakuAssistantConfig,
-      config.toStorage(),
-    );
+    _storeDanmakuAssistantConfig(config);
     clearDanmakuAssistantRecords();
     reloadDanmakuFilters();
   }
@@ -522,6 +609,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   bool addDanmakuAssistantTextRule(
     String content, {
     required bool absolute,
+    String? sampleContent,
+    int? sampleProgress,
   }) {
     final rule = content.trim();
     if (rule.isEmpty) return false;
@@ -532,10 +621,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (source.any((item) => item.trim() == rule)) return false;
 
     final rules = List<String>.of(source)..add(rule);
+    final config = absolute
+        ? danmakuAssistantConfig.copyWith(absoluteRules: rules)
+        : danmakuAssistantConfig.copyWith(gentleRules: rules);
     updateDanmakuAssistantConfig(
-      absolute
-          ? danmakuAssistantConfig.copyWith(absoluteRules: rules)
-          : danmakuAssistantConfig.copyWith(gentleRules: rules),
+      config.copyWith(
+        learningSamples: DanmakuLearningSample.collect(
+          config.learningSamples,
+          DanmakuLearningSample(
+            content: sampleContent ?? content,
+            keyword: rule,
+            mode: absolute ? 'contains' : 'exact',
+            progress: sampleProgress,
+          ),
+        ),
+      ),
     );
     return true;
   }
@@ -1078,11 +1178,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     assert(!isLive || seekTo == null);
     await player.open(
-      Media(
-        video,
-        start: seekTo,
-        extras: extras.isEmpty ? null : extras,
-      ),
+      Media(video, start: seekTo, extras: extras.isEmpty ? null : extras),
       play: false,
     );
   }
@@ -1125,10 +1221,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   void _startWakeLockTimer() {
     _wakeLockTimer?.cancel();
-    _wakeLockTimer = Timer(
-      const Duration(milliseconds: 500),
-      _stopWakeLock,
-    );
+    _wakeLockTimer = Timer(const Duration(milliseconds: 500), _stopWakeLock);
   }
 
   void _stopWakeLockTimer() {
@@ -1545,9 +1638,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void onForwardBackward(Duration duration) {
-    seekTo(
-      duration.clamp(Duration.zero, videoPlayerController!.state.duration),
-    ).whenComplete(play);
+    seekTo(duration.clamp(Duration.zero, videoPlayerController!.state.duration))
+        .whenComplete(play);
   }
 
   void doubleTapFuc(DoubleTapType type) {

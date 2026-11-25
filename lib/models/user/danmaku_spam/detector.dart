@@ -8,6 +8,9 @@ enum DanmakuSpamReason {
   expressiveCharacter('语气字符重复'),
   repeatedCharacter('单字符重复'),
   repeatedPhrase('短句周期重复'),
+  embeddedCharacterRun('局部字符连打'),
+  keyboardMash('疑似键盘乱按'),
+  embeddedPhrase('局部短句重复'),
   globalWindow('短句集中刷屏'),
   sameSenderWindow('同用户重复刷屏');
 
@@ -61,10 +64,8 @@ class DanmakuSpamMatch {
 }
 
 class DanmakuSpamDetector {
-  DanmakuSpamDetector({
-    int? processSalt,
-    this.maxTrackedKeys = 4096,
-  }) : _processSalt = processSalt ?? _defaultProcessSalt;
+  DanmakuSpamDetector({int? processSalt, this.maxTrackedKeys = 4096})
+    : _processSalt = processSalt ?? _defaultProcessSalt;
 
   static const int maxKeyLength = 64;
   static const int maxPeriodLength = 8;
@@ -83,6 +84,8 @@ class DanmakuSpamDetector {
     r'^[^\p{L}\p{N}\s]+$',
     unicode: true,
   );
+  static final RegExp _asciiAlphaNumericOnly = RegExp(r'^[a-z0-9]+$');
+  static final RegExp _textRune = RegExp(r'^[\p{L}\p{N}]$', unicode: true);
   static const Set<String> _expressiveCharacters = {
     '哈',
     '呵',
@@ -122,9 +125,7 @@ class DanmakuSpamDetector {
         periodLength <= maxPeriodLength &&
         periodLength < keyRunes.length &&
         keyRunes.length % periodLength == 0;
-    final repeatCount = hasRepeatedUnit
-        ? keyRunes.length ~/ periodLength
-        : 1;
+    final repeatCount = hasRepeatedUnit ? keyRunes.length ~/ periodLength : 1;
     final repeatBaseKey = hasRepeatedUnit
         ? String.fromCharCodes(keyRunes.take(periodLength))
         : normalizedKey;
@@ -143,6 +144,7 @@ class DanmakuSpamDetector {
     required String content,
     required int progress,
     required String sender,
+    bool compactCharacterRuns = false,
   }) {
     final normalized = normalize(content);
     if (normalized.normalizedKey.isEmpty) return null;
@@ -150,7 +152,13 @@ class DanmakuSpamDetector {
 
     final senderHash = _hashSender(sender);
     final internalReason = _internalReason(normalized);
-    if (internalReason != null) {
+    final compactedRun =
+        compactCharacterRuns &&
+        (internalReason == DanmakuSpamReason.expressiveCharacter ||
+            internalReason == DanmakuSpamReason.repeatedCharacter ||
+            internalReason == DanmakuSpamReason.embeddedCharacterRun) &&
+        compactDisplay(content) != content;
+    if (internalReason != null && !compactedRun) {
       return DanmakuSpamMatch(
         reason: internalReason,
         normalizedKey: normalized.normalizedKey,
@@ -255,9 +263,7 @@ class DanmakuSpamDetector {
   String _hashSender(String sender) =>
       Object.hash(_processSalt, sender).toUnsigned(32).toRadixString(16);
 
-  static DanmakuSpamReason? _internalReason(
-    DanmakuSpamNormalized normalized,
-  ) {
+  static DanmakuSpamReason? _internalReason(DanmakuSpamNormalized normalized) {
     final key = normalized.normalizedKey;
     final runes = key.runes.toList(growable: false);
     if (runes.isEmpty) return null;
@@ -275,7 +281,18 @@ class DanmakuSpamDetector {
       if (runes.length >= 5) return DanmakuSpamReason.mixedSymbols;
     }
 
-    if (normalized.repeatCount < 2) return null;
+    if (_hasEmbeddedCharacterRun(runes)) {
+      return DanmakuSpamReason.embeddedCharacterRun;
+    }
+    if (normalized.periodLength != 1 && _looksLikeKeyboardMash(key, runes)) {
+      return DanmakuSpamReason.keyboardMash;
+    }
+
+    if (normalized.repeatCount < 2) {
+      return _hasEmbeddedPhrase(runes)
+          ? DanmakuSpamReason.embeddedPhrase
+          : null;
+    }
     if (normalized.periodLength == 1) {
       final unit = normalized.repeatBaseKey;
       final expressive = _expressiveCharacters.contains(unit);
@@ -294,6 +311,78 @@ class DanmakuSpamDetector {
     return null;
   }
 
+  static bool _hasEmbeddedPhrase(List<int> runes) {
+    // Input is already bounded to 64 code points. Check primitive 2-8-rune
+    // units rather than a backtracking regex or runs of the same character.
+    for (var start = 0; start + 6 <= runes.length; start++) {
+      for (
+        var size = 2;
+        size <= maxPeriodLength && start + size * 3 <= runes.length;
+        size++
+      ) {
+        var repeated = true;
+        for (var offset = 0; offset < size; offset++) {
+          if (runes[start + offset] != runes[start + size + offset] ||
+              runes[start + offset] != runes[start + size * 2 + offset]) {
+            repeated = false;
+            break;
+          }
+        }
+        if (!repeated) continue;
+        final unit = runes.sublist(start, start + size);
+        if (_minimumPeriod(unit) == size &&
+            unit.any((rune) => _textRune.hasMatch(String.fromCharCode(rune)))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static bool _hasEmbeddedCharacterRun(List<int> runes) {
+    if (runes.length < 6) return false;
+    var runLength = 1;
+    for (var i = 1; i < runes.length; i++) {
+      if (runes[i] == runes[i - 1]) {
+        runLength += 1;
+      } else {
+        if (runLength >= _embeddedRunThreshold(runes[i - 1])) return true;
+        runLength = 1;
+      }
+    }
+    return runLength < runes.length &&
+        runLength >= _embeddedRunThreshold(runes.last);
+  }
+
+  static int _embeddedRunThreshold(int rune) {
+    final asciiLetter =
+        (rune >= 0x61 && rune <= 0x7a) || (rune >= 0x41 && rune <= 0x5a);
+    if (asciiLetter) return 5;
+    if (rune >= 0x30 && rune <= 0x39) return 6;
+    if (_expressiveCharacters.contains(String.fromCharCode(rune))) return 6;
+    return 4;
+  }
+
+  static bool _looksLikeKeyboardMash(String key, List<int> runes) {
+    if (runes.length < 16 || !_asciiAlphaNumericOnly.hasMatch(key)) {
+      return false;
+    }
+    var letters = 0;
+    var vowels = 0;
+    for (final rune in runes) {
+      if (rune < 0x61 || rune > 0x7a) continue;
+      letters += 1;
+      if (rune == 0x61 ||
+          rune == 0x65 ||
+          rune == 0x69 ||
+          rune == 0x6f ||
+          rune == 0x75) {
+        vowels += 1;
+      }
+    }
+    return letters >= 12 && vowels * 5 <= letters;
+  }
+
   static int _minimumPeriod(List<int> runes) {
     if (runes.isEmpty) return 0;
     final prefix = List<int>.filled(runes.length, 0);
@@ -307,6 +396,27 @@ class DanmakuSpamDetector {
     }
     final candidate = runes.length - prefix.last;
     return runes.length % candidate == 0 ? candidate : runes.length;
+  }
+
+  /// Rendering only: the original text remains available to filters, preview,
+  /// copying and learning. Do not use the shortened text as source evidence.
+  static String compactDisplay(String content) {
+    final runes = content.runes.toList(growable: false);
+    final buffer = StringBuffer();
+    var index = 0;
+    while (index < runes.length) {
+      var end = index + 1;
+      while (end < runes.length && runes[end] == runes[index]) {
+        end++;
+      }
+      final isText = _textRune.hasMatch(String.fromCharCode(runes[index]));
+      final count = isText ? min(3, end - index) : end - index;
+      for (var i = 0; i < count; i++) {
+        buffer.writeCharCode(runes[index]);
+      }
+      index = end;
+    }
+    return buffer.toString();
   }
 
   static String _foldWidth(String input) {

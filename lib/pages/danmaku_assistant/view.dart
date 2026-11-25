@@ -1,9 +1,15 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/models/user/danmaku_assistant.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_export.dart';
+import 'package:PiliPlus/models/user/danmaku_spam/learning_sample.dart';
+import 'package:PiliPlus/pages/danmaku_assistant/keyword_dialog.dart';
+import 'package:PiliPlus/pages/danmaku_assistant/records.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -16,7 +22,9 @@ class DanmakuAssistantPage extends StatefulWidget {
 
 class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
   PlPlayerController? _playerController;
-  late DanmakuAssistantConfig _config;
+  late DanmakuAssistantConfig _storedConfig;
+  DanmakuAssistantConfig get _config =>
+      _playerController?.danmakuAssistantConfig ?? _storedConfig;
 
   @override
   void initState() {
@@ -25,13 +33,13 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
     if (arguments is PlPlayerController) {
       _playerController = arguments;
     }
-    _config =
+    _storedConfig =
         _playerController?.danmakuAssistantConfig ??
         Pref.danmakuAssistantConfig;
   }
 
   void _save(DanmakuAssistantConfig config) {
-    setState(() => _config = config);
+    setState(() => _storedConfig = config);
     final playerController = _playerController;
     if (playerController != null) {
       playerController.updateDanmakuAssistantConfig(config);
@@ -101,6 +109,10 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
 
     final rule = result.trim();
     if (rule.isEmpty) return;
+    if (absolute && !await confirmBroadShortNumericRule(context, rule)) {
+      return;
+    }
+    if (!mounted) return;
     final rules = List<String>.of(
       absolute ? _config.absoluteRules : _config.gentleRules,
     );
@@ -119,8 +131,164 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
     final rules = List<String>.of(_config.gentleRules);
     if (rules.any((item) => item.trim() == rule)) return;
     rules.add(rule);
-    _save(_config.copyWith(gentleRules: rules));
+    _save(
+      _config.copyWith(
+        gentleRules: rules,
+        learningSamples: DanmakuLearningSample.collect(
+          _config.learningSamples,
+          DanmakuLearningSample(content: content, keyword: rule, mode: 'exact'),
+        ),
+      ),
+    );
   }
+
+  Future<void> _addWhitelist() async {
+    final controller = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('手动添加白名单'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: '弹幕完整原文',
+            helperText: '仅豁免自动检测；整条匹配，不覆盖手动屏蔽规则',
+            helperMaxLines: 3,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || text == null || text.trim().isEmpty) return;
+    if (_config.noiseWhitelist.contains(text.trim())) return;
+    _save(
+      _config.copyWith(
+        noiseWhitelist: [..._config.noiseWhitelist, text.trim()],
+      ),
+    );
+  }
+
+  Future<void> _exportLearningData() async {
+    final samples = List<DanmakuLearningSample>.of(_config.learningSamples);
+    final whitelist = List<String>.of(_config.noiseWhitelist);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导出弹幕学习资料？'),
+        content: Text(
+          '将导出 ${samples.length} 条手动屏蔽样本和 '
+          '${whitelist.length} 条手动白名单。屏蔽样本包含原文、关键词、'
+          '匹配方式和重复次数；不包含发送者、账号、CID 或视频链接。'
+          '不会自动上传，也不会自动生成规则。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('导出 JSON'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    exportToLocalFile(
+      localFileName: () => 'danmaku_learning_v2',
+      onExport: () => Utils.jsonEncoder.convert(
+        DanmakuLearningExport.build(
+          samples: samples,
+          whitelist: whitelist,
+        ),
+      ),
+    );
+  }
+
+  Widget _learningAndWhitelist() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _sectionTitle(
+        '手动白名单',
+        trailing: IconButton(
+          tooltip: '添加完整弹幕',
+          onPressed: _addWhitelist,
+          icon: const Icon(Icons.add),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Wrap(
+          spacing: 8,
+          children: [
+            for (final entry in _config.noiseWhitelist)
+              InputChip(
+                label: Text(entry),
+                onDeleted: () => _save(
+                  _config.copyWith(
+                    noiseWhitelist: List<String>.of(_config.noiseWhitelist)
+                      ..remove(entry),
+                  ),
+                ),
+              ),
+            if (_config.noiseWhitelist.isEmpty) const Text('暂无白名单；只由您手动添加或放行。'),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed:
+                _config.learningSamples.isEmpty &&
+                    _config.noiseWhitelist.isEmpty
+                ? null
+                : _exportLearningData,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('导出手动屏蔽与白名单 JSON'),
+          ),
+        ),
+      ),
+      ExpansionTile(
+        title: Text('待学习名单 ${_config.learningSamples.length} 条'),
+        subtitle: const Text('仅收集手动屏蔽；去重并保留最近 1000 条，随配置备份。'),
+        children: [
+          for (final sample in _config.learningSamples.take(50))
+            ListTile(
+              title: Text(sample.content),
+              subtitle: Text(
+                '关键词：${sample.keyword} · '
+                '${sample.mode == 'contains' ? '包含匹配' : '整条匹配'} · ${sample.count} 次',
+              ),
+              trailing: IconButton(
+                tooltip: '删除学习样本（不删除屏蔽规则）',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _save(
+                  _config.copyWith(
+                    learningSamples: List<DanmakuLearningSample>.of(
+                      _config.learningSamples,
+                    )..remove(sample),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ],
+  );
 
   void _removeRule(DanmakuAssistantKind kind, String rule) {
     switch (kind) {
@@ -297,10 +465,17 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
       ),
       SwitchListTile(
         title: const Text('重复短句/符号刷屏（测试）'),
-        subtitle: const Text('默认关闭；拦截单条周期重复及短时间内反复出现的短句'),
+        subtitle: const Text('默认关闭；合并长串连续字符为 3 个显示，拦截周期短句及时间/人数模板刷屏'),
         value: _config.blockRepeatedSpam,
-        onChanged: (value) =>
-            _save(_config.copyWith(blockRepeatedSpam: value)),
+        onChanged: (value) => _save(_config.copyWith(blockRepeatedSpam: value)),
+      ),
+      SwitchListTile(
+        title: const Text('激进乱码过滤（测试）'),
+        subtitle: const Text(
+          '默认关闭；含英文弹幕命中孤立出现、混杂标点或不在常用组合表任一条件即屏蔽。正常英文也可能被拦截，请通过记录手动放行。',
+        ),
+        value: _config.strictNoiseFilter,
+        onChanged: (value) => _save(_config.copyWith(strictNoiseFilter: value)),
       ),
     ],
   );
@@ -382,9 +557,10 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
         _switches(),
         _ruleSection(absolute: true),
         _ruleSection(absolute: false),
+        _learningAndWhitelist(),
         if (_playerController != null) ...[
-          _sectionTitle('最近已拦截（最多 80 条）'),
-          _records(blocked: true),
+          _sectionTitle('弹幕净化记录'),
+          DanmakuPurifyRecords(controller: _playerController!),
           _sectionTitle('最近读取的弹幕（点击 + 快速温和屏蔽）'),
           _records(blocked: false),
         ] else
@@ -399,7 +575,7 @@ class _DanmakuAssistantPageState extends State<DanmakuAssistantPage> {
 
     return SimpleScaffold(
       appBar: AppBar(
-        title: const Text('弹幕屏蔽助手'),
+        title: const Text('弹幕净化'),
         actions: [
           IconButton(
             tooltip: '恢复默认规则',

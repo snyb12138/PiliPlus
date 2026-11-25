@@ -213,7 +213,7 @@ class _ReplyPurifyPageState extends State<ReplyPurifyPage> {
     final padding = MediaQuery.viewPaddingOf(context);
     return SimpleScaffold(
       appBar: AppBar(
-        title: const Text('评论净化助手'),
+        title: const Text('评论净化'),
         actions: [
           IconButton(
             tooltip: '导入/导出',
