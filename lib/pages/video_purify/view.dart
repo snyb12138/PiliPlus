@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/user/video_purify.dart';
 import 'package:PiliPlus/pages/video_purify/controller.dart';
+import 'package:PiliPlus/pages/video_purify/jm_reading_list_page.dart';
 import 'package:PiliPlus/utils/recommend_filter.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -97,6 +98,8 @@ class _VideoPurifyPageState extends State<VideoPurifyPage> {
             : null,
         padding: EdgeInsets.only(bottom: padding.bottom + 32),
         children: [
+          const JmReadingListTile(),
+          const Divider(height: 1),
           const ListTile(
             leading: Icon(Icons.privacy_tip_outlined),
             title: Text('仅在本机按标题过滤'),
