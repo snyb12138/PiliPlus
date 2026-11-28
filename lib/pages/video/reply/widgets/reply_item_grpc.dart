@@ -16,7 +16,9 @@ import 'package:PiliPlus/common/widgets/text_ellipsis/text_ellipsis.dart';
 import 'package:PiliPlus/common/widgets/text_more/text_more.dart';
 import 'package:PiliPlus/common/widgets/translucent_row.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
-    show ReplyInfo, ReplyControl, Content, Url, ReplyControl_VoteOption, Emote;
+    show ReplyInfo, ReplyControl, Content, Url, ReplyControl_VoteOption, Emote,
+         Mode, MixedCard;
+import 'package:PiliPlus/grpc/bilibili/pagination.pb.dart' show FeedPagination;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
@@ -24,6 +26,7 @@ import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/user/jm_reading_list.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
+import 'package:PiliPlus/models/user/reply_number_scan.dart';
 import 'package:PiliPlus/pages/article/view.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/vote.dart';
 import 'package:PiliPlus/pages/member/widget/medal_widget.dart';
@@ -66,6 +69,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:protobuf/protobuf.dart';
 
 part 'package:PiliPlus/common/widgets/context_menu/reply_menu_helper.dart';
+part 'package:PiliPlus/common/widgets/context_menu/reply_number_search.dart';
 
 class _ReplyPurifyQuickActions extends StatefulWidget {
   const _ReplyPurifyQuickActions({
@@ -1744,6 +1748,25 @@ class ReplyItemGrpc extends StatelessWidget {
           leading: const Icon(Icons.copy_outlined, size: 19),
           title: Text('自由复制', style: style),
         ),
+        if (item.oid > Int64.ZERO && item.type > Int64.ZERO)
+          ListTile(
+            onTap: () {
+              Get.back();
+              showDialog<void>(
+                context: context,
+                builder: (_) => _ReplyNumberSearchDialog(
+                  oid: item.oid.toInt(),
+                  type: item.type.toInt(),
+                  startRootId: item.root > Int64.ZERO
+                      ? item.root.toString()
+                      : item.id.toString(),
+                ),
+              );
+            },
+            minLeadingWidth: 0,
+            leading: const Icon(Icons.search, size: 19),
+            title: Text('搜索评论编号', style: style),
+          ),
         ListTile(
           onTap: () {
             Get.back();

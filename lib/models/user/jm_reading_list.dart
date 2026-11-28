@@ -3,13 +3,31 @@ import 'dart:convert';
 abstract final class JmReadingList {
   static final _digits = RegExp(r'[0-9]+');
 
+  static String _normalizeDigits(String text) => String.fromCharCodes(
+    text.runes.map(
+      (rune) => rune >= 0xff10 && rune <= 0xff19 ? rune - 0xfee0 : rune,
+    ),
+  );
+
+  /// Search treats every digit in one comment as a single ordered candidate.
+  static String? assembleSearchCandidate(String comment) {
+    final digits = _digits
+        .allMatches(_normalizeDigits(comment))
+        .map((match) => match.group(0)!)
+        .join();
+    return digits.length > 4 ? digits : null;
+  }
+
+  static List<String> extractSelectionIds(String selection) {
+    final ids = extractIds(selection);
+    if (ids.isNotEmpty) return ids;
+    final assembled = assembleSearchCandidate(selection);
+    return assembled != null && assembled.length <= 8 ? [assembled] : [];
+  }
+
   /// Split before filtering by length so two IDs never become one.
   static List<String> extractIds(String selection) {
-    final normalized = String.fromCharCodes(
-      selection.runes.map(
-        (rune) => rune >= 0xff10 && rune <= 0xff19 ? rune - 0xfee0 : rune,
-      ),
-    );
+    final normalized = _normalizeDigits(selection);
     return {
       for (final match in _digits.allMatches(normalized))
         if (match.end - match.start >= 5 && match.end - match.start <= 8)

@@ -287,6 +287,7 @@ abstract final class ReplyGrpc {
     Int64? rpid,
     required Mode mode,
     required String? offset,
+    bool scanOnly = false,
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
   }) async {
@@ -301,6 +302,7 @@ abstract final class ReplyGrpc {
       ),
       MainListReply.fromBuffer,
     );
+    if (scanOnly) return res;
     if (res case Success(:final response)) {
       if (response.hasUpTop()) {
         _observeAiReply(response.upTop);
@@ -356,6 +358,7 @@ abstract final class ReplyGrpc {
     required int rpid,
     required Mode mode,
     required String? offset,
+    bool scanOnly = false,
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
     Map<Int64, ReplyInfo>? removed,
@@ -373,6 +376,7 @@ abstract final class ReplyGrpc {
       ),
       DetailListReply.fromBuffer,
     );
+    if (scanOnly) return res;
     if (res.dataOrNull case final response?) {
       _observeAiReplies(response.root.replies);
       _filterReplies(
@@ -389,6 +393,7 @@ abstract final class ReplyGrpc {
     required int type,
     required int oid,
     required FeedPagination pagination,
+    bool scanOnly = false,
     ReplyPurifyBlockedCallback? onBlocked,
     bool Function(int replyId)? isIgnored,
   }) async {
@@ -401,6 +406,7 @@ abstract final class ReplyGrpc {
       ),
       FoldListResp.fromBuffer,
     );
+    if (scanOnly) return res;
     if (res.dataOrNull case final response?) {
       _observeAiReplies(response.replies);
       _filterReplies(

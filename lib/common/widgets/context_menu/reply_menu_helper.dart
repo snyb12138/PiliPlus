@@ -10,6 +10,36 @@ void showReplyCopyDialog(
   String? videoTitle,
 }) {
   bool showEmote = false;
+  String? selection;
+
+  void extract(BuildContext context, String? text) {
+    if (showEmote || text == null || text.trim().isEmpty) {
+      SmartDialog.showToast('请先长按原文，选中含编号的文字');
+      return;
+    }
+    final ids = JmReadingList.extractSelectionIds(text);
+    if (ids.isEmpty) {
+      SmartDialog.showToast('选区内没有可确认的 5–8 位编号');
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (_) => _JmNumberDialog(
+        original: message,
+        initialIds: ids,
+        source: videoAid == null
+            ? null
+            : JmCommentSource(
+                aid: videoAid,
+                rootId: rootReplyId,
+                replyId: replyId,
+                excerpt: String.fromCharCodes(text.trim().runes.take(240)),
+                videoTitle: videoTitle,
+              ),
+      ),
+    );
+  }
+
   showDialog(
     context: context,
     builder: (context) => Dialog(
@@ -17,6 +47,7 @@ void showReplyCopyDialog(
       child: Padding(
         padding: const .symmetric(horizontal: 20, vertical: 16),
         child: SelectionArea(
+          onSelectionChanged: (content) => selection = content?.plainText,
           contextMenuBuilder: (_, state) {
             final buttonItems = state.contextMenuButtonItems;
             if (emotes.isNotEmpty) {
@@ -26,6 +57,7 @@ void showReplyCopyDialog(
                   label: showEmote ? '文本' : '表情',
                   onPressed: () {
                     state.hideAndClear();
+                    selection = null;
                     showEmote = !showEmote;
                     (context as Element).markNeedsBuild();
                   },
@@ -35,34 +67,14 @@ void showReplyCopyDialog(
             state.addLaunchMenuIfNeeded(buttonItems, index: 4);
             final selectedText = state.selectedText;
             if (state.isUncollapsed && selectedText != null) {
-              final ids = showEmote
-                  ? const <String>[]
-                  : JmReadingList.extractIds(selectedText);
-              if (ids.isNotEmpty) {
+              if (!showEmote &&
+                  JmReadingList.extractSelectionIds(selectedText).isNotEmpty) {
                 buttonItems.add(
                   ContextMenuButtonItem(
                     label: '提取编号',
                     onPressed: () {
                       state.hideAndClear();
-                      final excerpt = String.fromCharCodes(
-                        selectedText.trim().runes.take(240),
-                      );
-                      showDialog<void>(
-                        context: context,
-                        builder: (_) => _JmNumberDialog(
-                          original: message,
-                          initialIds: ids,
-                          source: videoAid == null
-                              ? null
-                              : JmCommentSource(
-                                  aid: videoAid,
-                                  rootId: rootReplyId,
-                                  replyId: replyId,
-                                  excerpt: excerpt,
-                                  videoTitle: videoTitle,
-                                ),
-                        ),
-                      );
+                      extract(context, selectedText);
                     },
                   ),
                 );
@@ -114,32 +126,50 @@ void showReplyCopyDialog(
               anchors: state.contextMenuAnchors,
             );
           },
-          child: SingleChildScrollView(
-            child: Text.rich(
-              showEmote
-                  ? TextSpan(
-                      children: emotes.entries.mapIndexed((i, e) {
-                        final emote = e.value;
-                        final size = emote.size.toInt() * 25.0;
-                        return TextSpan(
-                          children: [
-                            if (i != 0) const TextSpan(text: '\n\n'),
-                            WidgetSpan(
-                              child: NetworkImgLayer(
-                                src: emote.url,
-                                type: .emote,
-                                width: size,
-                                height: size,
-                              ),
-                            ),
-                            TextSpan(text: '\n${e.key}\n${emote.url}'),
-                          ],
-                        );
-                      }).toList(),
-                    )
-                  : TextSpan(text: message),
-              style: const TextStyle(fontSize: 15, height: 1.7),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Text.rich(
+                    showEmote
+                        ? TextSpan(
+                            children: emotes.entries.mapIndexed((i, e) {
+                              final emote = e.value;
+                              final size = emote.size.toInt() * 25.0;
+                              return TextSpan(
+                                children: [
+                                  if (i != 0) const TextSpan(text: '\n\n'),
+                                  WidgetSpan(
+                                    child: NetworkImgLayer(
+                                      src: emote.url,
+                                      type: .emote,
+                                      width: size,
+                                      height: size,
+                                    ),
+                                  ),
+                                  TextSpan(text: '\n${e.key}\n${emote.url}'),
+                                ],
+                              );
+                            }).toList(),
+                          )
+                        : TextSpan(text: message),
+                    style: const TextStyle(fontSize: 15, height: 1.7),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SelectionContainer.disabled(
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton(
+                    onPressed: () => extract(context, selection),
+                    child: const Text('提取编号'),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -164,7 +194,7 @@ class _JmNumberDialog extends StatefulWidget {
 
 class _JmNumberDialogState extends State<_JmNumberDialog> {
   late final _input = TextEditingController(text: widget.initialIds.join('\n'));
-  late List<String> _ids = widget.initialIds;
+  late List<String> _ids = JmReadingList.extractIds(_input.text);
   bool _saving = false;
 
   @override
