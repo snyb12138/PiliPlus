@@ -23,6 +23,7 @@ abstract final class GStorage {
   static late final Box<dynamic> video;
   static late final Box<int> watchProgress;
   static late final Box<Uint8List>? reply;
+  static late final Box<String> jmReadingList;
 
   static Future<void> init() async {
     Hive.init(path.join(appSupportDirPath, 'hive'));
@@ -54,6 +55,8 @@ abstract final class GStorage {
       ).then((res) => historyWord = res),
       // 视频设置
       Hive.openBox('video').then((res) => video = res),
+      // Keep comment sources out of general settings backup and sync.
+      Hive.openBox<String>('jmReadingList').then((res) => jmReadingList = res),
       Accounts.init(),
       Hive.openBox<int>(
         'watchProgress',
@@ -117,6 +120,7 @@ abstract final class GStorage {
       video.compact(),
       Accounts.account.compact(),
       watchProgress.compact(),
+      jmReadingList.compact(),
       ?reply?.compact(),
     ]);
   }
@@ -130,6 +134,7 @@ abstract final class GStorage {
       video.close(),
       Accounts.account.close(),
       watchProgress.close(),
+      jmReadingList.close(),
       ?reply?.close(),
     ]);
   }
@@ -143,6 +148,7 @@ abstract final class GStorage {
       video.clear(),
       Accounts.clear(),
       watchProgress.clear(),
+      jmReadingList.clear(),
       ?reply?.clear(),
     ]);
   }

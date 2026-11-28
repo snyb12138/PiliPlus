@@ -21,6 +21,7 @@ import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/models/user/jm_reading_list.dart';
 import 'package:PiliPlus/models/user/reply_ai_filter.dart';
 import 'package:PiliPlus/models/user/reply_density_detector.dart';
 import 'package:PiliPlus/pages/article/view.dart';
@@ -46,6 +47,7 @@ import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
+import 'package:PiliPlus/utils/jm_reading_list_store.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -1702,7 +1704,41 @@ class ReplyItemGrpc extends StatelessWidget {
         ListTile(
           onTap: () {
             Get.back();
-            showReplyCopyDialog(context, message, item.content.emotes);
+            final arguments = Get.arguments;
+            final tag =
+                getTag?.call() ??
+                (arguments is Map && arguments['heroTag'] is String
+                    ? arguments['heroTag'] as String
+                    : null);
+            String? videoTitle;
+            if (item.type == .ONE &&
+                tag != null &&
+                Get.isRegistered<VideoDetailController>(tag: tag)) {
+              final ctr = Get.find<VideoDetailController>(tag: tag);
+              if (ctr.aid == item.oid.toInt() && !ctr.isFileSource) {
+                try {
+                  videoTitle = ctr.isUgc
+                      ? ctr.ugcIntroCtr.videoDetail.value.title
+                      : ctr.pgcIntroCtr.pgcItem.title;
+                } catch (_) {
+                  // Older navigation paths may only have the video ID.
+                }
+              }
+            }
+            showReplyCopyDialog(
+              context,
+              message,
+              item.content.emotes,
+              videoAid:
+                  item.type == .ONE &&
+                      item.oid > Int64.ZERO &&
+                      item.id > Int64.ZERO
+                  ? item.oid.toString()
+                  : null,
+              rootReplyId: (item.hasRoot() ? item.root : item.id).toString(),
+              replyId: item.id.toString(),
+              videoTitle: videoTitle,
+            );
           },
           minLeadingWidth: 0,
           leading: const Icon(Icons.copy_outlined, size: 19),
